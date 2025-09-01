@@ -2,19 +2,13 @@ import React from 'react';
 import { createBottomTabNavigator } from '@react-navigation/bottom-tabs';
 import { Ionicons } from '@expo/vector-icons';
 import { NavigationService } from './NavigationService';
+import { ItineraryScreen } from '../screens/ItineraryScreen';
 
 // Placeholder screen components
 const MapScreen = () => (
   <div style={{ flex: 1, justifyContent: 'center', alignItems: 'center' }}>
     <h2>Map Screen</h2>
     <p>GPS location and nearby subway stations</p>
-  </div>
-);
-
-const ItineraryScreen = () => (
-  <div style={{ flex: 1, justifyContent: 'center', alignItems: 'center' }}>
-    <h2>Itinerary Screen</h2>
-    <p>Day-by-day travel schedule</p>
   </div>
 );
 
