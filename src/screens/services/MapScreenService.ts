@@ -1,4 +1,5 @@
 import { LocationService } from '../../services/LocationService';
+import { StationFinderService } from '../../services/StationFinderService';
 
 interface UserLocation {
   latitude: number;
@@ -28,41 +29,15 @@ interface MapRegion {
 
 export class MapScreenService {
   private locationService: LocationService;
+  private stationFinder: StationFinderService;
   private defaultLocation: UserLocation = {
     latitude: 35.6762, // Tokyo Station
     longitude: 139.6503
   };
 
-  // Major Tokyo subway stations
-  private tokyoStations: Omit<SubwayStation, 'distance'>[] = [
-    {
-      name: 'Tokyo Station',
-      latitude: 35.6812,
-      longitude: 139.7671,
-      lines: ['JR Yamanote', 'JR Tokaido', 'Marunouchi Line']
-    },
-    {
-      name: 'Shibuya Station',
-      latitude: 35.6580,
-      longitude: 139.7016,
-      lines: ['JR Yamanote', 'Ginza Line', 'Hanzomon Line']
-    },
-    {
-      name: 'Shinjuku Station',
-      latitude: 35.6896,
-      longitude: 139.7006,
-      lines: ['JR Yamanote', 'Marunouchi Line', 'Shinjuku Line']
-    },
-    {
-      name: 'Ikebukuro Station',
-      latitude: 35.7295,
-      longitude: 139.7109,
-      lines: ['JR Yamanote', 'Marunouchi Line', 'Yurakucho Line']
-    }
-  ];
-
   constructor(locationService: LocationService) {
     this.locationService = locationService;
+    this.stationFinder = new StationFinderService(locationService);
   }
 
   async getUserLocation(): Promise<LocationResult> {
@@ -133,26 +108,13 @@ export class MapScreenService {
   }
 
   findNearbyStations(userLocation: UserLocation, radiusKm: number = 5.0): SubwayStation[] {
-    const stationsWithDistance: SubwayStation[] = [];
-
-    for (const station of this.tokyoStations) {
-      const distance = this.locationService.calculateDistance(
-        userLocation.latitude,
-        userLocation.longitude,
-        station.latitude,
-        station.longitude
-      );
-
-      if (distance <= radiusKm) {
-        stationsWithDistance.push({
-          ...station,
-          distance: Math.round(distance * 10) / 10 // Round to 1 decimal
-        });
-      }
-    }
-
-    // Sort by distance (closest first)
-    return stationsWithDistance.sort((a, b) => a.distance - b.distance);
+    return this.stationFinder.findStationsInRadius(userLocation, radiusKm).map(station => ({
+      name: station.name,
+      latitude: station.latitude,
+      longitude: station.longitude,
+      distance: Math.round(station.distance * 10) / 10,
+      lines: station.lines
+    }));
   }
 
   getMapRegion(userLocation?: UserLocation): MapRegion {
