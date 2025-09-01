@@ -61,5 +61,38 @@ describe('ItineraryParser', () => {
       expect(result[1].date).toBe('2025-09-15');
       expect(result[1].entries).toHaveLength(2);
     });
+
+    it('should parse complete Japan schedule with all days and entries', () => {
+      const fs = require('fs');
+      const path = require('path');
+      const scheduleText = fs.readFileSync(
+        path.join(__dirname, '../../fixtures/japan-schedule.txt'), 
+        'utf8'
+      );
+
+      const parser = new ItineraryParser();
+      const result = parser.parseScheduleText(scheduleText);
+
+      expect(result).toHaveLength(7);
+      
+      // Validate first day
+      expect(result[0].date).toBe('2025-09-09');
+      expect(result[0].entries[0].type).toBe('arrival');
+      expect(result[0].entries[0].time).toBe('2:20pm');
+      expect(result[0].entries[0].location).toBe('HDN');
+      
+      // Validate transport entries
+      expect(result[0].entries[1].type).toBe('transport');
+      expect(result[0].entries[1].destination).toBe('COCO Nakameguro 202 Tokyo-to, Tokyo, Meguro-ku, Kami-Meguro 1-7-5-202, Japan');
+      
+      // Validate Osaka day
+      expect(result[1].date).toBe('2025-09-04');
+      expect(result[1].entries[0].description).toBe('Nozomi Train to Osaka');
+      
+      // Validate final day
+      expect(result[6].date).toBe('2025-09-18');
+      expect(result[6].entries[1].time).toBe('6:30pm');
+      expect(result[6].entries[1].description).toBe('Flight at 6:30pm');
+    });
   });
 });

@@ -18,7 +18,12 @@ export class ItineraryParser {
     let currentDay: DaySchedule | null = null;
     
     for (const line of lines) {
-      const dateMatch = line.match(/(\d{1,2})\/(\d{1,2})\/(\d{4})/);
+      // Try full date format first (M/D/YYYY)
+      let dateMatch = line.match(/(\d{1,2})\/(\d{1,2})\/(\d{4})/);
+      // Then try short format (M/D) and assume 2025
+      if (!dateMatch) {
+        dateMatch = line.match(/^(\d{1,2})\/(\d{1,2})$/);
+      }
       
       if (dateMatch) {
         // Save previous day if exists
@@ -27,14 +32,14 @@ export class ItineraryParser {
         }
         
         // Start new day
-        const [, month, day, year] = dateMatch;
+        const [, month, day, year = '2025'] = dateMatch;
         const date = `${year}-${month.padStart(2, '0')}-${day.padStart(2, '0')}`;
         currentDay = {
           date,
           entries: []
         };
       } else if (line.startsWith('- ') && currentDay) {
-        const description = line.substring(2);
+        const description = line.substring(2).trim();
         const entry: ItineraryEntry = {
           time: null,
           type: 'unknown',
@@ -54,12 +59,20 @@ export class ItineraryParser {
           if (locationMatch) {
             entry.location = locationMatch[1];
           }
-        } else if (description.includes('Subway to') || description.includes('Move to') || description.includes('Train to')) {
+        } else if (description.includes('Subway to') || description.includes('Move to') || description.includes('Train to') || description.includes('Nozomi Train') || description.includes('Trains to')) {
           entry.type = 'transport';
           const colonIndex = description.indexOf(':');
           if (colonIndex > -1) {
             entry.destination = description.substring(colonIndex + 2);
           }
+        } else if (description.includes('See ') || description.includes('show at')) {
+          entry.type = 'event';
+          const colonIndex = description.indexOf(':');
+          if (colonIndex > -1) {
+            entry.destination = description.substring(colonIndex + 2);
+          }
+        } else if (description.includes('Stay at') || description.includes('Flight at')) {
+          entry.type = description.includes('Flight') ? 'departure' : 'accommodation';
         }
         
         currentDay.entries.push(entry);
