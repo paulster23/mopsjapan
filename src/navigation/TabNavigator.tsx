@@ -4,20 +4,8 @@ import { Ionicons } from '@expo/vector-icons';
 import { NavigationService } from './NavigationService';
 import { ItineraryScreen } from '../screens/ItineraryScreen';
 import { MapScreen } from '../screens/MapScreen';
-
-const PlacesScreen = () => (
-  <div style={{ flex: 1, justifyContent: 'center', alignItems: 'center' }}>
-    <h2>Places Screen</h2>
-    <p>Google Calendar favorites</p>
-  </div>
-);
-
-const DebugScreen = () => (
-  <div style={{ flex: 1, justifyContent: 'center', alignItems: 'center' }}>
-    <h2>Debug Screen</h2>
-    <p>Test suite health and debugging tools</p>
-  </div>
-);
+import { PlacesScreen } from '../screens/PlacesScreen';
+import { DebugScreen } from '../screens/DebugScreen';
 
 const Tab = createBottomTabNavigator();
 
