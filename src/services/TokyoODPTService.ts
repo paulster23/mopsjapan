@@ -39,6 +39,17 @@ export interface ODPTResponse<T> {
   error?: string;
 }
 
+export interface StationStatus {
+  stationId: string;
+  status: 'Normal' | 'Delayed' | 'Suspended' | 'Unknown';
+  delays: Array<{
+    line: string;
+    delayMinutes: number;
+    reason: string;
+  }>;
+  lastUpdated: string;
+}
+
 export class TokyoODPTService {
   private readonly baseUrl = 'https://api.odpt.org/api/v4';
   private readonly consumerKey = process.env.ODPT_API_KEY || 'demo';
@@ -188,6 +199,65 @@ export class TokyoODPTService {
       return {
         success: false,
         error: `Network error: ${(error as Error).message}`
+      };
+    }
+  }
+
+  async getStationStatus(stationName: string): Promise<StationStatus> {
+    try {
+      // First, search for the station to get its ID and railway
+      const stationResult = await this.searchStations(stationName);
+      
+      if (!stationResult.success || !stationResult.data || stationResult.data.length === 0) {
+        return {
+          stationId: '',
+          status: 'Unknown',
+          delays: [],
+          lastUpdated: new Date().toISOString()
+        };
+      }
+
+      const station = stationResult.data[0];
+      
+      // Get railway status for the station's line
+      const railwayStatusResult = await this.getRailwayStatus(station.railway);
+      
+      if (!railwayStatusResult.success || !railwayStatusResult.data) {
+        return {
+          stationId: station.id,
+          status: 'Unknown',
+          delays: [],
+          lastUpdated: new Date().toISOString()
+        };
+      }
+
+      const railwayStatus = railwayStatusResult.data;
+      
+      // Convert railway status to station status
+      const status: 'Normal' | 'Delayed' | 'Suspended' | 'Unknown' = 
+        railwayStatus.status === 'Normal' ? 'Normal' :
+        railwayStatus.status.includes('Delay') || railwayStatus.status.includes('遅延') ? 'Delayed' :
+        railwayStatus.status.includes('Suspend') || railwayStatus.status.includes('運転見合わせ') ? 'Suspended' :
+        'Unknown';
+
+      const delays = status === 'Delayed' ? [{
+        line: station.railway,
+        delayMinutes: 5, // Default delay estimate
+        reason: railwayStatus.statusText || 'Service disruption'
+      }] : [];
+
+      return {
+        stationId: station.id,
+        status,
+        delays,
+        lastUpdated: railwayStatus.timestamp
+      };
+    } catch (error) {
+      return {
+        stationId: '',
+        status: 'Unknown',
+        delays: [],
+        lastUpdated: new Date().toISOString()
       };
     }
   }

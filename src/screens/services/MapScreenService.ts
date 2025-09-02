@@ -1,5 +1,6 @@
 import { LocationService } from '../../services/LocationService';
 import { StationFinderService } from '../../services/StationFinderService';
+import { TokyoODPTService, StationStatus } from '../../services/TokyoODPTService';
 
 interface UserLocation {
   latitude: number;
@@ -27,17 +28,30 @@ interface MapRegion {
   longitudeDelta: number;
 }
 
+
+interface StationWithStatus extends SubwayStation {
+  status: string;
+  delays: Array<{
+    line: string;
+    delayMinutes: number;
+    reason: string;
+  }>;
+  lastUpdated?: string;
+}
+
 export class MapScreenService {
   private locationService: LocationService;
   private stationFinder: StationFinderService;
+  private odptService?: TokyoODPTService;
   private defaultLocation: UserLocation = {
     latitude: 35.6762, // Tokyo Station
     longitude: 139.6503
   };
 
-  constructor(locationService: LocationService) {
+  constructor(locationService: LocationService, odptService?: TokyoODPTService) {
     this.locationService = locationService;
     this.stationFinder = new StationFinderService(locationService);
+    this.odptService = odptService;
   }
 
   async getUserLocation(): Promise<LocationResult> {
@@ -157,5 +171,46 @@ export class MapScreenService {
       location.longitude >= tokyoBounds.west &&
       location.longitude <= tokyoBounds.east
     );
+  }
+
+  async getStationStatus(stationName: string): Promise<StationStatus> {
+    if (!this.odptService) {
+      return {
+        stationId: '',
+        status: 'Unknown',
+        delays: [],
+        lastUpdated: new Date().toISOString()
+      };
+    }
+
+    try {
+      const status = await this.odptService.getStationStatus(stationName);
+      return status;
+    } catch (error) {
+      return {
+        stationId: '',
+        status: 'Unknown',
+        delays: [],
+        lastUpdated: new Date().toISOString()
+      };
+    }
+  }
+
+  async getNearbyStationsWithStatus(userLocation: UserLocation, radiusKm: number = 5.0): Promise<StationWithStatus[]> {
+    const nearbyStations = this.findNearbyStations(userLocation, radiusKm);
+    
+    const stationsWithStatus: StationWithStatus[] = [];
+    
+    for (const station of nearbyStations) {
+      const status = await this.getStationStatus(station.name);
+      stationsWithStatus.push({
+        ...station,
+        status: status.status,
+        delays: status.delays,
+        lastUpdated: status.lastUpdated
+      });
+    }
+    
+    return stationsWithStatus;
   }
 }

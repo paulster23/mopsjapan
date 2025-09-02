@@ -2,6 +2,7 @@ import React, { useEffect, useState } from 'react';
 import { View, Text, StyleSheet, TouchableOpacity, Alert, FlatList } from 'react-native';
 import { MapScreenService } from './services/MapScreenService';
 import { LocationService } from '../services/LocationService';
+import { TokyoODPTService } from '../services/TokyoODPTService';
 
 interface UserLocation {
   latitude: number;
@@ -16,13 +17,23 @@ interface SubwayStation {
   lines: string[];
 }
 
+interface StationWithStatus extends SubwayStation {
+  status: string;
+  delays: Array<{
+    line: string;
+    delayMinutes: number;
+    reason: string;
+  }>;
+  lastUpdated?: string;
+}
+
 export function MapScreen() {
   const [userLocation, setUserLocation] = useState<UserLocation | null>(null);
-  const [nearbyStations, setNearbyStations] = useState<SubwayStation[]>([]);
+  const [nearbyStations, setNearbyStations] = useState<StationWithStatus[]>([]);
   const [loading, setLoading] = useState(false);
   const [locationStatus, setLocationStatus] = useState<string>('Not requested');
   
-  const mapService = new MapScreenService(new LocationService());
+  const mapService = new MapScreenService(new LocationService(), new TokyoODPTService());
 
   useEffect(() => {
     // Auto-request location on component mount
@@ -40,8 +51,8 @@ export function MapScreen() {
         setUserLocation(result.location);
         setLocationStatus(`Located: ${mapService.formatLocationForDisplay(result.location.latitude, result.location.longitude)}`);
         
-        // Find nearby stations
-        const stations = mapService.findNearbyStations(result.location, 3.0);
+        // Find nearby stations with real-time status
+        const stations = await mapService.getNearbyStationsWithStatus(result.location, 3.0);
         setNearbyStations(stations);
       } else {
         setLocationStatus(`Error: ${result.error}`);
@@ -50,7 +61,7 @@ export function MapScreen() {
         // Use default Tokyo location
         const defaultLocation = { latitude: 35.6762, longitude: 139.6503 };
         setUserLocation(defaultLocation);
-        const stations = mapService.findNearbyStations(defaultLocation, 3.0);
+        const stations = await mapService.getNearbyStationsWithStatus(defaultLocation, 3.0);
         setNearbyStations(stations);
       }
     } catch (error) {
@@ -61,17 +72,46 @@ export function MapScreen() {
     }
   };
 
-  const renderStation = ({ item }: { item: SubwayStation }) => (
+  const renderStation = ({ item }: { item: StationWithStatus }) => (
     <View style={styles.stationItem}>
       <View style={styles.stationHeader}>
         <Text style={styles.stationName}>{item.name}</Text>
-        <Text style={styles.stationDistance}>{item.distance}km</Text>
+        <View style={styles.stationMeta}>
+          <Text style={styles.stationDistance}>{item.distance}km</Text>
+          <View style={[styles.statusIndicator, { backgroundColor: getStatusColor(item.status) }]} />
+          <Text style={[styles.statusText, { color: getStatusColor(item.status) }]}>
+            {item.status}
+          </Text>
+        </View>
       </View>
       <Text style={styles.stationLines}>
         Lines: {item.lines.join(', ')}
       </Text>
+      {item.delays.length > 0 && (
+        <View style={styles.delaysContainer}>
+          {item.delays.map((delay, index) => (
+            <Text key={index} style={styles.delayText}>
+              🚫 {delay.line}: +{delay.delayMinutes}min ({delay.reason})
+            </Text>
+          ))}
+        </View>
+      )}
+      {item.lastUpdated && (
+        <Text style={styles.lastUpdated}>
+          Last updated: {new Date(item.lastUpdated).toLocaleTimeString()}
+        </Text>
+      )}
     </View>
   );
+
+  const getStatusColor = (status: string): string => {
+    switch (status) {
+      case 'Normal': return '#28a745';
+      case 'Delayed': return '#fd7e14';
+      case 'Suspended': return '#dc3545';
+      default: return '#6c757d';
+    }
+  };
 
   return (
     <View style={styles.container} testID="map-container">
@@ -200,11 +240,27 @@ const styles = StyleSheet.create({
     fontSize: 16,
     fontWeight: '600',
     color: '#333',
+    flex: 1,
+  },
+  stationMeta: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
   },
   stationDistance: {
     fontSize: 14,
     color: '#007AFF',
     fontWeight: '500',
+  },
+  statusIndicator: {
+    width: 8,
+    height: 8,
+    borderRadius: 4,
+  },
+  statusText: {
+    fontSize: 12,
+    fontWeight: '600',
+    textTransform: 'uppercase',
   },
   stationLines: {
     fontSize: 12,
@@ -242,5 +298,23 @@ const styles = StyleSheet.create({
     fontSize: 12,
     color: '#007AFF',
     fontFamily: 'monospace',
+  },
+  delaysContainer: {
+    marginTop: 8,
+    paddingTop: 8,
+    borderTopWidth: 1,
+    borderTopColor: '#eee',
+  },
+  delayText: {
+    fontSize: 11,
+    color: '#fd7e14',
+    marginBottom: 2,
+    fontWeight: '500',
+  },
+  lastUpdated: {
+    fontSize: 10,
+    color: '#999',
+    marginTop: 4,
+    fontStyle: 'italic',
   },
 });

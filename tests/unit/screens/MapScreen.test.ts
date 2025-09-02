@@ -1,8 +1,10 @@
 import { MapScreenService } from '../../../src/screens/services/MapScreenService';
 import { LocationService } from '../../../src/services/LocationService';
+import { TokyoODPTService } from '../../../src/services/TokyoODPTService';
 
-// Mock location service
+// Mock services
 jest.mock('../../../src/services/LocationService');
+jest.mock('../../../src/services/TokyoODPTService');
 
 describe('MapScreenService', () => {
   beforeEach(() => {
@@ -201,6 +203,69 @@ describe('MapScreenService', () => {
       const formatted = mapService.formatLocationForDisplay(-35.6762, -139.6503);
 
       expect(formatted).toBe('-35.6762, -139.6503');
+    });
+  });
+
+  describe('getStationStatus', () => {
+    it('should fetch real-time status for a station', async () => {
+      const mockLocationService = new LocationService() as jest.Mocked<LocationService>;
+      const mockOdptService = new TokyoODPTService() as jest.Mocked<TokyoODPTService>;
+      mockOdptService.getStationStatus.mockResolvedValue({
+        stationId: 'odpt.Station:JR-East.Tokaido.Tokyo',
+        status: 'Normal',
+        delays: [],
+        lastUpdated: '2025-09-02T10:30:00Z'
+      });
+
+      const mapService = new MapScreenService(mockLocationService, mockOdptService);
+      
+      const status = await mapService.getStationStatus('Tokyo Station');
+
+      expect(status.status).toBe('Normal');
+      expect(mockOdptService.getStationStatus).toHaveBeenCalledWith('Tokyo Station');
+    });
+
+    it('should handle station status fetch errors', async () => {
+      const mockLocationService = new LocationService() as jest.Mocked<LocationService>;
+      const mockOdptService = new TokyoODPTService() as jest.Mocked<TokyoODPTService>;
+      mockOdptService.getStationStatus.mockRejectedValue(new Error('API unavailable'));
+
+      const mapService = new MapScreenService(mockLocationService, mockOdptService);
+      
+      const status = await mapService.getStationStatus('Tokyo Station');
+
+      expect(status.status).toBe('Unknown');
+      expect(status.stationId).toBe('');
+    });
+  });
+
+  describe('getNearbyStationsWithStatus', () => {
+    it('should return stations with real-time status information', async () => {
+      const mockLocationService = new LocationService() as jest.Mocked<LocationService>;
+      const mockOdptService = new TokyoODPTService() as jest.Mocked<TokyoODPTService>;
+      
+      mockLocationService.calculateDistance.mockImplementation((lat1, lon1, lat2, lon2) => {
+        if (lat2 === 35.6812 && lon2 === 139.7671) return 1.2; // Tokyo Station
+        return 5.0;
+      });
+
+      mockOdptService.getStationStatus.mockResolvedValue({
+        stationId: 'odpt.Station:JR-East.Tokaido.Tokyo',
+        status: 'Delayed',
+        delays: [{ line: 'JR Tokaido Line', delayMinutes: 5, reason: 'Signal adjustment' }],
+        lastUpdated: '2025-09-02T10:30:00Z'
+      });
+
+      const mapService = new MapScreenService(mockLocationService, mockOdptService);
+      
+      const userLocation = { latitude: 35.6762, longitude: 139.6503 };
+      const stationsWithStatus = await mapService.getNearbyStationsWithStatus(userLocation, 3.0);
+
+      expect(stationsWithStatus).toHaveLength(1);
+      expect(stationsWithStatus[0].name).toBe('Tokyo Station');
+      expect(stationsWithStatus[0].status).toBe('Delayed');
+      expect(stationsWithStatus[0].delays).toHaveLength(1);
+      expect(stationsWithStatus[0].delays[0].delayMinutes).toBe(5);
     });
   });
 });
