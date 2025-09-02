@@ -1,10 +1,12 @@
 import { MapScreenService } from '../../../src/screens/services/MapScreenService';
 import { LocationService } from '../../../src/services/LocationService';
 import { TokyoODPTService } from '../../../src/services/TokyoODPTService';
+import { RouteCalculationService } from '../../../src/services/RouteCalculationService';
 
 // Mock services
 jest.mock('../../../src/services/LocationService');
 jest.mock('../../../src/services/TokyoODPTService');
+jest.mock('../../../src/services/RouteCalculationService');
 
 describe('MapScreenService', () => {
   beforeEach(() => {
@@ -266,6 +268,118 @@ describe('MapScreenService', () => {
       expect(stationsWithStatus[0].status).toBe('Delayed');
       expect(stationsWithStatus[0].delays).toHaveLength(1);
       expect(stationsWithStatus[0].delays[0].delayMinutes).toBe(5);
+    });
+  });
+
+  describe('getRouteOptions', () => {
+    it('should calculate route options between two locations', async () => {
+      const mockLocationService = new LocationService() as jest.Mocked<LocationService>;
+      const mockOdptService = new TokyoODPTService() as jest.Mocked<TokyoODPTService>;
+      const mockRouteService = new RouteCalculationService(mockLocationService, {} as any) as jest.Mocked<RouteCalculationService>;
+      
+      mockRouteService.getRouteOptions.mockResolvedValue([
+        {
+          type: 'transit',
+          route: {
+            segments: [{ line: 'JR Yamanote Line', fromStation: 'Tokyo', toStation: 'Shibuya', duration: 15, stationCount: 5 }],
+            totalDuration: 15,
+            totalDistance: 6.2,
+            transferCount: 0
+          },
+          duration: 15,
+          distance: 6.2
+        },
+        {
+          type: 'walking',
+          walkingRoute: { distance: 6.2, duration: 74, mode: 'walking' },
+          duration: 74,
+          distance: 6.2
+        }
+      ]);
+
+      const mapService = new MapScreenService(mockLocationService, mockOdptService, mockRouteService);
+      
+      const fromLocation = { latitude: 35.6812, longitude: 139.7671 };
+      const toLocation = { latitude: 35.6580, longitude: 139.7016 };
+      const routeOptions = await mapService.getRouteOptions(fromLocation, toLocation);
+
+      expect(routeOptions).toHaveLength(2);
+      expect(routeOptions[0].type).toBe('transit');
+      expect(routeOptions[0].duration).toBe(15);
+      expect(routeOptions[1].type).toBe('walking');
+      expect(routeOptions[1].duration).toBe(74);
+    });
+
+    it('should handle route calculation errors', async () => {
+      const mockLocationService = new LocationService() as jest.Mocked<LocationService>;
+      const mockOdptService = new TokyoODPTService() as jest.Mocked<TokyoODPTService>;
+      const mockRouteService = new RouteCalculationService(mockLocationService, {} as any) as jest.Mocked<RouteCalculationService>;
+      
+      mockRouteService.getRouteOptions.mockRejectedValue(new Error('Route calculation failed'));
+
+      const mapService = new MapScreenService(mockLocationService, mockOdptService, mockRouteService);
+      
+      const fromLocation = { latitude: 35.6812, longitude: 139.7671 };
+      const toLocation = { latitude: 35.6580, longitude: 139.7016 };
+      const routeOptions = await mapService.getRouteOptions(fromLocation, toLocation);
+
+      expect(routeOptions).toEqual([]);
+    });
+  });
+
+  describe('getDirections', () => {
+    it('should generate turn-by-turn directions for a route', async () => {
+      const mockLocationService = new LocationService() as jest.Mocked<LocationService>;
+      const mockOdptService = new TokyoODPTService() as jest.Mocked<TokyoODPTService>;
+      const mockRouteService = new RouteCalculationService(mockLocationService, {} as any) as jest.Mocked<RouteCalculationService>;
+
+      const mapService = new MapScreenService(mockLocationService, mockOdptService, mockRouteService);
+      
+      const route = {
+        segments: [
+          { line: 'JR Yamanote Line', fromStation: 'Tokyo', toStation: 'Shibuya', duration: 15, stationCount: 5 }
+        ],
+        totalDuration: 15,
+        totalDistance: 6.2,
+        transferCount: 0
+      };
+
+      const directions = await mapService.getDirections(route);
+
+      expect(directions).toHaveLength(3);
+      expect(directions[0].type).toBe('walk');
+      expect(directions[0].instruction).toContain('Walk to Tokyo Station');
+      expect(directions[1].type).toBe('transit');
+      expect(directions[1].instruction).toContain('Take JR Yamanote Line');
+      expect(directions[2].type).toBe('walk');
+      expect(directions[2].instruction).toContain('Walk to destination from Shibuya Station');
+    });
+
+    it('should handle multi-segment routes with transfers', async () => {
+      const mockLocationService = new LocationService() as jest.Mocked<LocationService>;
+      const mockOdptService = new TokyoODPTService() as jest.Mocked<TokyoODPTService>;
+      const mockRouteService = new RouteCalculationService(mockLocationService, {} as any) as jest.Mocked<RouteCalculationService>;
+
+      const mapService = new MapScreenService(mockLocationService, mockOdptService, mockRouteService);
+      
+      const route = {
+        segments: [
+          { line: 'JR Yamanote Line', fromStation: 'Tokyo', toStation: 'Shimbashi', duration: 5, stationCount: 2 },
+          { line: 'Toei Asakusa Line', fromStation: 'Shimbashi', toStation: 'Asakusa', duration: 12, stationCount: 6, transferTime: 3 }
+        ],
+        totalDuration: 20,
+        totalDistance: 8.5,
+        transferCount: 1
+      };
+
+      const directions = await mapService.getDirections(route);
+
+      expect(directions).toHaveLength(5);
+      expect(directions[0].instruction).toContain('Walk to Tokyo Station');
+      expect(directions[1].instruction).toContain('Take JR Yamanote Line to Shimbashi');
+      expect(directions[2].instruction).toContain('Transfer to Toei Asakusa Line');
+      expect(directions[3].instruction).toContain('Take Toei Asakusa Line to Asakusa');
+      expect(directions[4].instruction).toContain('Walk to destination');
     });
   });
 });

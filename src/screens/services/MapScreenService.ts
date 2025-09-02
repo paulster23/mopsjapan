@@ -1,6 +1,7 @@
 import { LocationService } from '../../services/LocationService';
 import { StationFinderService } from '../../services/StationFinderService';
 import { TokyoODPTService, StationStatus } from '../../services/TokyoODPTService';
+import { RouteCalculationService, RouteOption, Route } from '../../services/RouteCalculationService';
 
 interface UserLocation {
   latitude: number;
@@ -39,19 +40,30 @@ interface StationWithStatus extends SubwayStation {
   lastUpdated?: string;
 }
 
+interface DirectionStep {
+  type: 'walk' | 'transit' | 'transfer';
+  instruction: string;
+  duration?: number;
+  line?: string;
+  fromStation?: string;
+  toStation?: string;
+}
+
 export class MapScreenService {
   private locationService: LocationService;
   private stationFinder: StationFinderService;
   private odptService?: TokyoODPTService;
+  private routeService?: RouteCalculationService;
   private defaultLocation: UserLocation = {
     latitude: 35.6762, // Tokyo Station
     longitude: 139.6503
   };
 
-  constructor(locationService: LocationService, odptService?: TokyoODPTService) {
+  constructor(locationService: LocationService, odptService?: TokyoODPTService, routeService?: RouteCalculationService) {
     this.locationService = locationService;
     this.stationFinder = new StationFinderService(locationService);
     this.odptService = odptService;
+    this.routeService = routeService;
   }
 
   async getUserLocation(): Promise<LocationResult> {
@@ -212,5 +224,69 @@ export class MapScreenService {
     }
     
     return stationsWithStatus;
+  }
+
+  async getRouteOptions(fromLocation: UserLocation, toLocation: UserLocation): Promise<RouteOption[]> {
+    if (!this.routeService) {
+      return [];
+    }
+
+    try {
+      const options = await this.routeService.getRouteOptions(fromLocation, toLocation);
+      return options;
+    } catch (error) {
+      return [];
+    }
+  }
+
+  async getDirections(route: Route): Promise<DirectionStep[]> {
+    const directions: DirectionStep[] = [];
+
+    if (route.segments.length === 0) {
+      return directions;
+    }
+
+    // Add initial walking step to first station
+    const firstSegment = route.segments[0];
+    directions.push({
+      type: 'walk',
+      instruction: `Walk to ${firstSegment.fromStation} Station`,
+      duration: 5 // Estimated walking time
+    });
+
+    // Add transit and transfer steps
+    for (let i = 0; i < route.segments.length; i++) {
+      const segment = route.segments[i];
+      
+      // Add transit step
+      directions.push({
+        type: 'transit',
+        instruction: `Take ${segment.line} to ${segment.toStation}`,
+        duration: segment.duration,
+        line: segment.line,
+        fromStation: segment.fromStation,
+        toStation: segment.toStation
+      });
+
+      // Add transfer step if there's a next segment
+      if (i < route.segments.length - 1) {
+        const nextSegment = route.segments[i + 1];
+        directions.push({
+          type: 'transfer',
+          instruction: `Transfer to ${nextSegment.line}`,
+          duration: segment.transferTime || 3
+        });
+      }
+    }
+
+    // Add final walking step from last station
+    const lastSegment = route.segments[route.segments.length - 1];
+    directions.push({
+      type: 'walk',
+      instruction: `Walk to destination from ${lastSegment.toStation} Station`,
+      duration: 5 // Estimated walking time
+    });
+
+    return directions;
   }
 }

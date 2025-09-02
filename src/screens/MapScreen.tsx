@@ -3,6 +3,8 @@ import { View, Text, StyleSheet, TouchableOpacity, Alert, FlatList } from 'react
 import { MapScreenService } from './services/MapScreenService';
 import { LocationService } from '../services/LocationService';
 import { TokyoODPTService } from '../services/TokyoODPTService';
+import { RouteCalculationService, RouteOption, Route } from '../services/RouteCalculationService';
+import { StationFinderService } from '../services/StationFinderService';
 
 interface UserLocation {
   latitude: number;
@@ -27,13 +29,31 @@ interface StationWithStatus extends SubwayStation {
   lastUpdated?: string;
 }
 
+interface DirectionStep {
+  type: 'walk' | 'transit' | 'transfer';
+  instruction: string;
+  duration?: number;
+  line?: string;
+  fromStation?: string;
+  toStation?: string;
+}
+
 export function MapScreen() {
   const [userLocation, setUserLocation] = useState<UserLocation | null>(null);
   const [nearbyStations, setNearbyStations] = useState<StationWithStatus[]>([]);
   const [loading, setLoading] = useState(false);
   const [locationStatus, setLocationStatus] = useState<string>('Not requested');
+  const [routeOptions, setRouteOptions] = useState<RouteOption[]>([]);
+  const [selectedRoute, setSelectedRoute] = useState<Route | null>(null);
+  const [directions, setDirections] = useState<DirectionStep[]>([]);
+  const [showDirections, setShowDirections] = useState(false);
   
-  const mapService = new MapScreenService(new LocationService(), new TokyoODPTService());
+  const locationService = new LocationService();
+  const mapService = new MapScreenService(
+    locationService, 
+    new TokyoODPTService(),
+    new RouteCalculationService(locationService, new StationFinderService(locationService))
+  );
 
   useEffect(() => {
     // Auto-request location on component mount
@@ -72,6 +92,33 @@ export function MapScreen() {
     }
   };
 
+  const handleCalculateRoute = async (destination: StationWithStatus) => {
+    if (!userLocation) {
+      Alert.alert('Location Required', 'Please get your location first');
+      return;
+    }
+
+    try {
+      const toLocation = { latitude: destination.latitude, longitude: destination.longitude };
+      const options = await mapService.getRouteOptions(userLocation, toLocation);
+      setRouteOptions(options);
+      
+      // Auto-select the fastest route (first in sorted array)
+      if (options.length > 0 && options[0].route) {
+        setSelectedRoute(options[0].route);
+        const routeDirections = await mapService.getDirections(options[0].route);
+        setDirections(routeDirections);
+      }
+    } catch (error) {
+      console.error('Route calculation error:', error);
+      Alert.alert('Route Error', 'Failed to calculate route');
+    }
+  };
+
+  const handleShowDirections = () => {
+    setShowDirections(true);
+  };
+
   const renderStation = ({ item }: { item: StationWithStatus }) => (
     <View style={styles.stationItem}>
       <View style={styles.stationHeader}>
@@ -101,6 +148,13 @@ export function MapScreen() {
           Last updated: {new Date(item.lastUpdated).toLocaleTimeString()}
         </Text>
       )}
+      <TouchableOpacity 
+        style={styles.routeButton} 
+        onPress={() => handleCalculateRoute(item)}
+        disabled={!userLocation}
+      >
+        <Text style={styles.routeButtonText}>📍 Get Directions</Text>
+      </TouchableOpacity>
     </View>
   );
 
@@ -151,6 +205,58 @@ export function MapScreen() {
           </Text>
         )}
       </View>
+
+      {selectedRoute && (
+        <View style={styles.routeSection}>
+          <Text style={styles.sectionTitle}>
+            Route to {selectedRoute.segments[selectedRoute.segments.length - 1]?.toStation}
+          </Text>
+          <View style={styles.routeSummary}>
+            <Text style={styles.routeTime}>⏱️ {selectedRoute.totalDuration} min</Text>
+            <Text style={styles.routeDistance}>📏 {selectedRoute.totalDistance.toFixed(1)} km</Text>
+            {selectedRoute.transferCount > 0 && (
+              <Text style={styles.routeTransfers}>🔄 {selectedRoute.transferCount} transfers</Text>
+            )}
+          </View>
+          
+          <TouchableOpacity 
+            style={styles.directionsButton} 
+            onPress={handleShowDirections}
+          >
+            <Text style={styles.directionsButtonText}>🗺️ Show Step-by-Step Directions</Text>
+          </TouchableOpacity>
+        </View>
+      )}
+
+      {showDirections && directions.length > 0 && (
+        <View style={styles.directionsSection}>
+          <Text style={styles.sectionTitle}>Turn-by-Turn Directions</Text>
+          <FlatList
+            data={directions}
+            renderItem={({ item, index }) => (
+              <View style={styles.directionStep}>
+                <View style={styles.stepNumber}>
+                  <Text style={styles.stepNumberText}>{index + 1}</Text>
+                </View>
+                <View style={styles.stepContent}>
+                  <Text style={styles.stepInstruction}>{item.instruction}</Text>
+                  {item.duration && (
+                    <Text style={styles.stepDuration}>⏱️ {item.duration} min</Text>
+                  )}
+                </View>
+              </View>
+            )}
+            keyExtractor={(_, index) => index.toString()}
+            style={styles.directionsList}
+          />
+          <TouchableOpacity 
+            style={styles.hideDirectionsButton} 
+            onPress={() => setShowDirections(false)}
+          >
+            <Text style={styles.hideDirectionsButtonText}>Hide Directions</Text>
+          </TouchableOpacity>
+        </View>
+      )}
 
       <View style={styles.mapPlaceholder}>
         <Text style={styles.mapPlaceholderText}>
@@ -316,5 +422,109 @@ const styles = StyleSheet.create({
     color: '#999',
     marginTop: 4,
     fontStyle: 'italic',
+  },
+  routeButton: {
+    backgroundColor: '#007AFF',
+    padding: 8,
+    borderRadius: 4,
+    marginTop: 8,
+    alignItems: 'center',
+  },
+  routeButtonText: {
+    color: '#fff',
+    fontSize: 12,
+    fontWeight: '500',
+  },
+  routeSection: {
+    marginBottom: 16,
+    padding: 16,
+    backgroundColor: '#e8f4f8',
+    borderRadius: 8,
+    borderLeftWidth: 4,
+    borderLeftColor: '#007AFF',
+  },
+  routeSummary: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    marginBottom: 12,
+    flexWrap: 'wrap',
+  },
+  routeTime: {
+    fontSize: 14,
+    fontWeight: '600',
+    color: '#007AFF',
+  },
+  routeDistance: {
+    fontSize: 14,
+    fontWeight: '600',
+    color: '#28a745',
+  },
+  routeTransfers: {
+    fontSize: 14,
+    fontWeight: '600',
+    color: '#fd7e14',
+  },
+  directionsButton: {
+    backgroundColor: '#28a745',
+    padding: 10,
+    borderRadius: 6,
+    alignItems: 'center',
+  },
+  directionsButtonText: {
+    color: '#fff',
+    fontSize: 14,
+    fontWeight: '600',
+  },
+  directionsSection: {
+    marginBottom: 16,
+  },
+  directionsList: {
+    maxHeight: 200,
+    marginBottom: 8,
+  },
+  directionStep: {
+    flexDirection: 'row',
+    alignItems: 'flex-start',
+    marginBottom: 12,
+    backgroundColor: '#f8f9fa',
+    padding: 12,
+    borderRadius: 6,
+  },
+  stepNumber: {
+    width: 24,
+    height: 24,
+    borderRadius: 12,
+    backgroundColor: '#007AFF',
+    justifyContent: 'center',
+    alignItems: 'center',
+    marginRight: 12,
+  },
+  stepNumberText: {
+    color: '#fff',
+    fontSize: 12,
+    fontWeight: 'bold',
+  },
+  stepContent: {
+    flex: 1,
+  },
+  stepInstruction: {
+    fontSize: 14,
+    color: '#333',
+    lineHeight: 20,
+    marginBottom: 2,
+  },
+  stepDuration: {
+    fontSize: 12,
+    color: '#666',
+  },
+  hideDirectionsButton: {
+    backgroundColor: '#6c757d',
+    padding: 8,
+    borderRadius: 4,
+    alignItems: 'center',
+  },
+  hideDirectionsButtonText: {
+    color: '#fff',
+    fontSize: 12,
   },
 });
