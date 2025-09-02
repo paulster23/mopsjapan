@@ -60,6 +60,15 @@ export class ItineraryScreenService {
     return this.parser.parseScheduleText(scheduleText);
   }
 
+  async loadRealJapanScheduleForScreen(): Promise<DaySchedule[]> {
+    try {
+      return await this.parser.loadRealJapanSchedule();
+    } catch (error) {
+      console.error('Failed to load real Japan schedule for screen:', error);
+      return [];
+    }
+  }
+
   validateItineraryData(itinerary: DaySchedule[]): ValidationResult {
     const errors: string[] = [];
 

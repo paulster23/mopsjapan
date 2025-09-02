@@ -12,6 +12,25 @@ interface DaySchedule {
 }
 
 export class ItineraryParser {
+  async loadRealJapanSchedule(): Promise<DaySchedule[]> {
+    try {
+      // In a real React Native app, we'd use require() or import
+      // For testing, we'll load the fixture data
+      const fs = await import('fs');
+      const path = await import('path');
+      
+      const scheduleText = fs.readFileSync(
+        path.join(process.cwd(), 'tests/fixtures/real-japan-schedule.txt'),
+        'utf8'
+      );
+      
+      return this.parseScheduleText(scheduleText);
+    } catch (error) {
+      console.error('Failed to load real Japan schedule:', error);
+      return [];
+    }
+  }
+
   parseScheduleText(scheduleText: string): DaySchedule[] {
     const lines = scheduleText.trim().split('\n');
     const daySchedules: DaySchedule[] = [];
@@ -59,8 +78,14 @@ export class ItineraryParser {
           if (locationMatch) {
             entry.location = locationMatch[1];
           }
-        } else if (description.includes('Subway to') || description.includes('Move to') || description.includes('Train to') || description.includes('Nozomi Train') || description.includes('Trains to')) {
+        } else if (description.includes('Subway to') || description.includes('Trains to') || description.includes('Nozomi Train')) {
           entry.type = 'transport';
+          const colonIndex = description.indexOf(':');
+          if (colonIndex > -1) {
+            entry.destination = description.substring(colonIndex + 2);
+          }
+        } else if (description.includes('Move to')) {
+          entry.type = 'accommodation';
           const colonIndex = description.indexOf(':');
           if (colonIndex > -1) {
             entry.destination = description.substring(colonIndex + 2);
@@ -71,8 +96,14 @@ export class ItineraryParser {
           if (colonIndex > -1) {
             entry.destination = description.substring(colonIndex + 2);
           }
-        } else if (description.includes('Stay at') || description.includes('Flight at')) {
-          entry.type = description.includes('Flight') ? 'departure' : 'accommodation';
+        } else if (description.includes('Stay at')) {
+          entry.type = 'accommodation';
+          const colonIndex = description.indexOf(':');
+          if (colonIndex > -1) {
+            entry.destination = description.substring(colonIndex + 2);
+          }
+        } else if (description.includes('Flight at')) {
+          entry.type = 'departure';
         }
         
         currentDay.entries.push(entry);

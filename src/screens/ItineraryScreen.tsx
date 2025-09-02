@@ -1,8 +1,6 @@
 import React, { useEffect, useState } from 'react';
 import { View, Text, ScrollView, StyleSheet, TouchableOpacity, Alert, Modal, TextInput } from 'react-native';
 import { ItineraryScreenService } from './services/ItineraryScreenService';
-import * as fs from 'fs';
-import * as path from 'path';
 
 interface DaySchedule {
   date: string;
@@ -46,15 +44,10 @@ export function ItineraryScreen() {
 
   const loadItinerary = async () => {
     try {
-      const scheduleText = fs.readFileSync(
-        path.join(process.cwd(), 'tests/fixtures/japan-schedule.txt'),
-        'utf8'
-      );
-      
-      const parsedItinerary = await service.parseScheduleText(scheduleText);
+      const parsedItinerary = await service.loadRealJapanScheduleForScreen();
       setItinerary(parsedItinerary);
     } catch (error) {
-      console.error('Failed to load itinerary:', error);
+      console.error('Failed to load real Japan itinerary:', error);
       setItinerary([]);
     } finally {
       setLoading(false);
