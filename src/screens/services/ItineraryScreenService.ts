@@ -121,4 +121,90 @@ export class ItineraryScreenService {
     
     return matchingEntries;
   }
+
+  addEntry(itinerary: DaySchedule[], dateStr: string, newEntry: DaySchedule['entries'][0]): DaySchedule[] {
+    const updatedItinerary = [...itinerary];
+    
+    // Find existing day
+    const dayIndex = updatedItinerary.findIndex(day => day.date === dateStr);
+    
+    if (dayIndex >= 0) {
+      // Add to existing day
+      updatedItinerary[dayIndex] = {
+        ...updatedItinerary[dayIndex],
+        entries: [...updatedItinerary[dayIndex].entries, newEntry]
+      };
+    } else {
+      // Create new day
+      const newDay: DaySchedule = {
+        date: dateStr,
+        entries: [newEntry]
+      };
+      updatedItinerary.push(newDay);
+      
+      // Sort chronologically
+      updatedItinerary.sort((a, b) => a.date.localeCompare(b.date));
+    }
+    
+    return updatedItinerary;
+  }
+
+  updateEntry(itinerary: DaySchedule[], dateStr: string, entryIndex: number, updatedEntry: DaySchedule['entries'][0]): DaySchedule[] {
+    const updatedItinerary = [...itinerary];
+    
+    const dayIndex = updatedItinerary.findIndex(day => day.date === dateStr);
+    
+    if (dayIndex >= 0 && entryIndex < updatedItinerary[dayIndex].entries.length) {
+      const updatedEntries = [...updatedItinerary[dayIndex].entries];
+      updatedEntries[entryIndex] = updatedEntry;
+      
+      updatedItinerary[dayIndex] = {
+        ...updatedItinerary[dayIndex],
+        entries: updatedEntries
+      };
+    }
+    
+    return updatedItinerary;
+  }
+
+  deleteEntry(itinerary: DaySchedule[], dateStr: string, entryIndex: number): DaySchedule[] {
+    const updatedItinerary = [...itinerary];
+    
+    const dayIndex = updatedItinerary.findIndex(day => day.date === dateStr);
+    
+    if (dayIndex >= 0 && entryIndex < updatedItinerary[dayIndex].entries.length) {
+      const updatedEntries = [...updatedItinerary[dayIndex].entries];
+      updatedEntries.splice(entryIndex, 1);
+      
+      updatedItinerary[dayIndex] = {
+        ...updatedItinerary[dayIndex],
+        entries: updatedEntries
+      };
+    }
+    
+    return updatedItinerary;
+  }
+
+  addDay(itinerary: DaySchedule[], dateStr: string): DaySchedule[] {
+    const updatedItinerary = [...itinerary];
+    
+    // Check if day already exists
+    const existingDayIndex = updatedItinerary.findIndex(day => day.date === dateStr);
+    
+    if (existingDayIndex >= 0) {
+      return updatedItinerary; // Day already exists, return unchanged
+    }
+    
+    const newDay: DaySchedule = {
+      date: dateStr,
+      entries: []
+    };
+    
+    updatedItinerary.push(newDay);
+    
+    // Sort chronologically
+    updatedItinerary.sort((a, b) => a.date.localeCompare(b.date));
+    
+    return updatedItinerary;
+  }
 }

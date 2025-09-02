@@ -138,4 +138,209 @@ describe('ItineraryScreenService', () => {
       expect(result.errors.length).toBeGreaterThan(0);
     });
   });
+
+  describe('addEntry', () => {
+    it('should add a new entry to the specified day', () => {
+      const service = new ItineraryScreenService();
+      
+      const itinerary = [
+        {
+          date: '2025-09-09',
+          entries: [
+            {
+              time: '2:20pm',
+              type: 'arrival',
+              location: 'HDN',
+              description: 'Arrive air HDN at 2:20pm local time'
+            }
+          ]
+        }
+      ];
+
+      const newEntry = {
+        time: '3:00pm',
+        type: 'transport',
+        location: 'Airport',
+        destination: 'Nakameguro',
+        description: 'Take subway to apartment'
+      };
+
+      const result = service.addEntry(itinerary, '2025-09-09', newEntry);
+      
+      expect(result[0].entries).toHaveLength(2);
+      expect(result[0].entries[1]).toEqual(newEntry);
+    });
+
+    it('should handle adding entry to non-existent day', () => {
+      const service = new ItineraryScreenService();
+      
+      const itinerary = [
+        {
+          date: '2025-09-09',
+          entries: []
+        }
+      ];
+
+      const newEntry = {
+        time: '10:00am',
+        type: 'event',
+        description: 'Sightseeing'
+      };
+
+      const result = service.addEntry(itinerary, '2025-09-10', newEntry);
+      
+      expect(result).toHaveLength(2);
+      expect(result[1].date).toBe('2025-09-10');
+      expect(result[1].entries).toHaveLength(1);
+      expect(result[1].entries[0]).toEqual(newEntry);
+    });
+  });
+
+  describe('updateEntry', () => {
+    it('should update an existing entry', () => {
+      const service = new ItineraryScreenService();
+      
+      const itinerary = [
+        {
+          date: '2025-09-09',
+          entries: [
+            {
+              time: '2:20pm',
+              type: 'arrival',
+              location: 'HDN',
+              description: 'Arrive air HDN at 2:20pm local time'
+            }
+          ]
+        }
+      ];
+
+      const updatedEntry = {
+        time: '2:30pm',
+        type: 'arrival',
+        location: 'HDN',
+        description: 'Arrive at Haneda Airport at 2:30pm local time'
+      };
+
+      const result = service.updateEntry(itinerary, '2025-09-09', 0, updatedEntry);
+      
+      expect(result[0].entries[0]).toEqual(updatedEntry);
+    });
+
+    it('should handle updating non-existent entry gracefully', () => {
+      const service = new ItineraryScreenService();
+      
+      const itinerary = [
+        {
+          date: '2025-09-09',
+          entries: [
+            {
+              time: '2:20pm',
+              type: 'arrival',
+              description: 'Original entry'
+            }
+          ]
+        }
+      ];
+
+      const updatedEntry = {
+        time: '3:00pm',
+        type: 'transport',
+        description: 'Updated entry'
+      };
+
+      const result = service.updateEntry(itinerary, '2025-09-09', 5, updatedEntry);
+      
+      // Should return original itinerary unchanged
+      expect(result[0].entries).toHaveLength(1);
+      expect(result[0].entries[0].description).toBe('Original entry');
+    });
+  });
+
+  describe('deleteEntry', () => {
+    it('should delete an entry from the specified day', () => {
+      const service = new ItineraryScreenService();
+      
+      const itinerary = [
+        {
+          date: '2025-09-09',
+          entries: [
+            {
+              time: '2:20pm',
+              type: 'arrival',
+              description: 'First entry'
+            },
+            {
+              time: '3:00pm',
+              type: 'transport',
+              description: 'Second entry'
+            }
+          ]
+        }
+      ];
+
+      const result = service.deleteEntry(itinerary, '2025-09-09', 0);
+      
+      expect(result[0].entries).toHaveLength(1);
+      expect(result[0].entries[0].description).toBe('Second entry');
+    });
+
+    it('should handle deleting non-existent entry gracefully', () => {
+      const service = new ItineraryScreenService();
+      
+      const itinerary = [
+        {
+          date: '2025-09-09',
+          entries: [
+            {
+              time: '2:20pm',
+              type: 'arrival',
+              description: 'Only entry'
+            }
+          ]
+        }
+      ];
+
+      const result = service.deleteEntry(itinerary, '2025-09-09', 5);
+      
+      // Should return original itinerary unchanged
+      expect(result[0].entries).toHaveLength(1);
+      expect(result[0].entries[0].description).toBe('Only entry');
+    });
+  });
+
+  describe('addDay', () => {
+    it('should add a new day to the itinerary', () => {
+      const service = new ItineraryScreenService();
+      
+      const itinerary = [
+        {
+          date: '2025-09-09',
+          entries: []
+        }
+      ];
+
+      const result = service.addDay(itinerary, '2025-09-10');
+      
+      expect(result).toHaveLength(2);
+      expect(result[1].date).toBe('2025-09-10');
+      expect(result[1].entries).toHaveLength(0);
+    });
+
+    it('should sort days chronologically after adding', () => {
+      const service = new ItineraryScreenService();
+      
+      const itinerary = [
+        {
+          date: '2025-09-15',
+          entries: []
+        }
+      ];
+
+      const result = service.addDay(itinerary, '2025-09-10');
+      
+      expect(result).toHaveLength(2);
+      expect(result[0].date).toBe('2025-09-10');
+      expect(result[1].date).toBe('2025-09-15');
+    });
+  });
 });
