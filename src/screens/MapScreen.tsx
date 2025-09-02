@@ -1,5 +1,6 @@
 import React, { useEffect, useState } from 'react';
 import { View, Text, StyleSheet, TouchableOpacity, Alert, FlatList } from 'react-native';
+import { useTheme } from '../contexts/ThemeContext';
 import { MapScreenService } from './services/MapScreenService';
 import { LocationService } from '../services/LocationService';
 import { TokyoODPTService } from '../services/TokyoODPTService';
@@ -39,6 +40,7 @@ interface DirectionStep {
 }
 
 export function MapScreen() {
+  const { theme, colors, toggleTheme } = useTheme();
   const [userLocation, setUserLocation] = useState<UserLocation | null>(null);
   const [nearbyStations, setNearbyStations] = useState<StationWithStatus[]>([]);
   const [loading, setLoading] = useState(false);
@@ -47,6 +49,8 @@ export function MapScreen() {
   const [selectedRoute, setSelectedRoute] = useState<Route | null>(null);
   const [directions, setDirections] = useState<DirectionStep[]>([]);
   const [showDirections, setShowDirections] = useState(false);
+  const [offlineMode, setOfflineMode] = useState(false);
+  const [hasCachedData, setHasCachedData] = useState(false);
   
   const locationService = new LocationService();
   const mapService = new MapScreenService(
@@ -58,7 +62,18 @@ export function MapScreen() {
   useEffect(() => {
     // Auto-request location on component mount
     handleGetLocation();
+    checkOfflineData();
   }, []);
+
+  const checkOfflineData = async () => {
+    try {
+      // Check if there's cached map data available
+      const result = await mapService.offlineMapService.getCachedSubwayMap();
+      setHasCachedData(result.success);
+    } catch (error) {
+      setHasCachedData(false);
+    }
+  };
 
   const handleGetLocation = async () => {
     setLoading(true);
@@ -71,8 +86,10 @@ export function MapScreen() {
         setUserLocation(result.location);
         setLocationStatus(`Located: ${mapService.formatLocationForDisplay(result.location.latitude, result.location.longitude)}`);
         
-        // Find nearby stations with real-time status
-        const stations = await mapService.getNearbyStationsWithStatus(result.location, 3.0);
+        // Find nearby stations with real-time status or offline data
+        const stations = offlineMode 
+          ? await handleGetOfflineStations(result.location, 3.0)
+          : await mapService.getNearbyStationsWithStatus(result.location, 3.0);
         setNearbyStations(stations);
       } else {
         setLocationStatus(`Error: ${result.error}`);
@@ -81,7 +98,9 @@ export function MapScreen() {
         // Use default Tokyo location
         const defaultLocation = { latitude: 35.6762, longitude: 139.6503 };
         setUserLocation(defaultLocation);
-        const stations = await mapService.getNearbyStationsWithStatus(defaultLocation, 3.0);
+        const stations = offlineMode 
+          ? await handleGetOfflineStations(defaultLocation, 3.0)
+          : await mapService.getNearbyStationsWithStatus(defaultLocation, 3.0);
         setNearbyStations(stations);
       }
     } catch (error) {
@@ -119,41 +138,63 @@ export function MapScreen() {
     setShowDirections(true);
   };
 
+  const handleGetOfflineStations = async (location: UserLocation, radius: number): Promise<StationWithStatus[]> => {
+    const result = await mapService.findNearbyStationsWithOffline(location, radius);
+    if (result.success && result.stations) {
+      return result.stations;
+    }
+    return [];
+  };
+
+  const handleToggleOfflineMode = async () => {
+    const newOfflineMode = !offlineMode;
+    setOfflineMode(newOfflineMode);
+    
+    if (userLocation) {
+      setLoading(true);
+      const stations = newOfflineMode 
+        ? await handleGetOfflineStations(userLocation, 3.0)
+        : await mapService.getNearbyStationsWithStatus(userLocation, 3.0);
+      setNearbyStations(stations);
+      setLoading(false);
+    }
+  };
+
   const renderStation = ({ item }: { item: StationWithStatus }) => (
-    <View style={styles.stationItem}>
-      <View style={styles.stationHeader}>
-        <Text style={styles.stationName}>{item.name}</Text>
-        <View style={styles.stationMeta}>
-          <Text style={styles.stationDistance}>{item.distance}km</Text>
-          <View style={[styles.statusIndicator, { backgroundColor: getStatusColor(item.status) }]} />
-          <Text style={[styles.statusText, { color: getStatusColor(item.status) }]}>
+    <View style={themedStyles.stationItem}>
+      <View style={themedStyles.stationHeader}>
+        <Text style={themedStyles.stationName}>{item.name}</Text>
+        <View style={themedStyles.stationMeta}>
+          <Text style={themedStyles.stationDistance}>{item.distance}km</Text>
+          <View style={[themedStyles.statusIndicator, { backgroundColor: getStatusColor(item.status) }]} />
+          <Text style={[themedStyles.statusText, { color: getStatusColor(item.status) }]}>
             {item.status}
           </Text>
         </View>
       </View>
-      <Text style={styles.stationLines}>
+      <Text style={themedStyles.stationLines}>
         Lines: {item.lines.join(', ')}
       </Text>
       {item.delays.length > 0 && (
-        <View style={styles.delaysContainer}>
+        <View style={themedStyles.delaysContainer}>
           {item.delays.map((delay, index) => (
-            <Text key={index} style={styles.delayText}>
+            <Text key={index} style={themedStyles.delayText}>
               🚫 {delay.line}: +{delay.delayMinutes}min ({delay.reason})
             </Text>
           ))}
         </View>
       )}
       {item.lastUpdated && (
-        <Text style={styles.lastUpdated}>
+        <Text style={themedStyles.lastUpdated}>
           Last updated: {new Date(item.lastUpdated).toLocaleTimeString()}
         </Text>
       )}
       <TouchableOpacity 
-        style={styles.routeButton} 
+        style={themedStyles.routeButton} 
         onPress={() => handleCalculateRoute(item)}
         disabled={!userLocation}
       >
-        <Text style={styles.routeButtonText}>📍 Get Directions</Text>
+        <Text style={themedStyles.routeButtonText}>📍 Get Directions</Text>
       </TouchableOpacity>
     </View>
   );
@@ -167,28 +208,53 @@ export function MapScreen() {
     }
   };
 
+  const themedStyles = createThemedStyles(colors);
+  
   return (
-    <View style={styles.container} testID="map-container">
-      <Text style={styles.title}>Map & Location</Text>
-      
-      <View style={styles.locationSection}>
-        <Text style={styles.sectionTitle}>Your Location</Text>
-        <Text style={styles.locationStatus}>{locationStatus}</Text>
-        
+    <View style={[themedStyles.container]} testID="map-container">
+      <View style={themedStyles.header}>
+        <Text style={themedStyles.title}>Map & Location</Text>
         <TouchableOpacity 
-          style={styles.locationButton} 
-          onPress={handleGetLocation}
-          disabled={loading}
+          style={themedStyles.themeButton}
+          onPress={toggleTheme}
         >
-          <Text style={styles.buttonText}>
-            {loading ? 'Getting Location...' : 'Update Location'}
+          <Text style={themedStyles.themeButtonText}>
+            {theme === 'light' ? '🌙' : '☀️'}
           </Text>
         </TouchableOpacity>
       </View>
+      
+      <View style={themedStyles.locationSection}>
+        <Text style={themedStyles.sectionTitle}>Your Location</Text>
+        <Text style={themedStyles.locationStatus}>{locationStatus}</Text>
+        
+        <TouchableOpacity 
+          style={themedStyles.locationButton} 
+          onPress={handleGetLocation}
+          disabled={loading}
+        >
+          <Text style={themedStyles.buttonText}>
+            {loading ? 'Getting Location...' : 'Update Location'}
+          </Text>
+        </TouchableOpacity>
 
-      <View style={styles.stationsSection}>
-        <Text style={styles.sectionTitle}>
+        {hasCachedData && (
+          <TouchableOpacity 
+            style={[themedStyles.locationButton, offlineMode ? themedStyles.offlineButtonActive : themedStyles.offlineButton]} 
+            onPress={handleToggleOfflineMode}
+            disabled={loading}
+          >
+            <Text style={[themedStyles.buttonText, offlineMode && themedStyles.offlineButtonText]}>
+              {offlineMode ? '📶 Go Online' : '📴 Use Offline Mode'}
+            </Text>
+          </TouchableOpacity>
+        )}
+      </View>
+
+      <View style={themedStyles.stationsSection}>
+        <Text style={themedStyles.sectionTitle}>
           Nearby Subway Stations ({nearbyStations.length})
+          {offlineMode && <Text style={themedStyles.offlineIndicator}> 📴 OFFLINE</Text>}
         </Text>
         
         {nearbyStations.length > 0 ? (
@@ -196,77 +262,77 @@ export function MapScreen() {
             data={nearbyStations}
             renderItem={renderStation}
             keyExtractor={(item) => item.name}
-            style={styles.stationsList}
+            style={themedStyles.stationsList}
             testID="stations-list"
           />
         ) : (
-          <Text style={styles.noStationsText}>
+          <Text style={themedStyles.noStationsText}>
             {loading ? 'Finding stations...' : 'No nearby stations found'}
           </Text>
         )}
       </View>
 
       {selectedRoute && (
-        <View style={styles.routeSection}>
-          <Text style={styles.sectionTitle}>
+        <View style={themedStyles.routeSection}>
+          <Text style={themedStyles.sectionTitle}>
             Route to {selectedRoute.segments[selectedRoute.segments.length - 1]?.toStation}
           </Text>
-          <View style={styles.routeSummary}>
-            <Text style={styles.routeTime}>⏱️ {selectedRoute.totalDuration} min</Text>
-            <Text style={styles.routeDistance}>📏 {selectedRoute.totalDistance.toFixed(1)} km</Text>
+          <View style={themedStyles.routeSummary}>
+            <Text style={themedStyles.routeTime}>⏱️ {selectedRoute.totalDuration} min</Text>
+            <Text style={themedStyles.routeDistance}>📏 {selectedRoute.totalDistance.toFixed(1)} km</Text>
             {selectedRoute.transferCount > 0 && (
-              <Text style={styles.routeTransfers}>🔄 {selectedRoute.transferCount} transfers</Text>
+              <Text style={themedStyles.routeTransfers}>🔄 {selectedRoute.transferCount} transfers</Text>
             )}
           </View>
           
           <TouchableOpacity 
-            style={styles.directionsButton} 
+            style={themedStyles.directionsButton} 
             onPress={handleShowDirections}
           >
-            <Text style={styles.directionsButtonText}>🗺️ Show Step-by-Step Directions</Text>
+            <Text style={themedStyles.directionsButtonText}>🗺️ Show Step-by-Step Directions</Text>
           </TouchableOpacity>
         </View>
       )}
 
       {showDirections && directions.length > 0 && (
-        <View style={styles.directionsSection}>
-          <Text style={styles.sectionTitle}>Turn-by-Turn Directions</Text>
+        <View style={themedStyles.directionsSection}>
+          <Text style={themedStyles.sectionTitle}>Turn-by-Turn Directions</Text>
           <FlatList
             data={directions}
             renderItem={({ item, index }) => (
-              <View style={styles.directionStep}>
-                <View style={styles.stepNumber}>
-                  <Text style={styles.stepNumberText}>{index + 1}</Text>
+              <View style={themedStyles.directionStep}>
+                <View style={themedStyles.stepNumber}>
+                  <Text style={themedStyles.stepNumberText}>{index + 1}</Text>
                 </View>
-                <View style={styles.stepContent}>
-                  <Text style={styles.stepInstruction}>{item.instruction}</Text>
+                <View style={themedStyles.stepContent}>
+                  <Text style={themedStyles.stepInstruction}>{item.instruction}</Text>
                   {item.duration && (
-                    <Text style={styles.stepDuration}>⏱️ {item.duration} min</Text>
+                    <Text style={themedStyles.stepDuration}>⏱️ {item.duration} min</Text>
                   )}
                 </View>
               </View>
             )}
             keyExtractor={(_, index) => index.toString()}
-            style={styles.directionsList}
+            style={themedStyles.directionsList}
           />
           <TouchableOpacity 
-            style={styles.hideDirectionsButton} 
+            style={themedStyles.hideDirectionsButton} 
             onPress={() => setShowDirections(false)}
           >
-            <Text style={styles.hideDirectionsButtonText}>Hide Directions</Text>
+            <Text style={themedStyles.hideDirectionsButtonText}>Hide Directions</Text>
           </TouchableOpacity>
         </View>
       )}
 
-      <View style={styles.mapPlaceholder}>
-        <Text style={styles.mapPlaceholderText}>
+      <View style={themedStyles.mapPlaceholder}>
+        <Text style={themedStyles.mapPlaceholderText}>
           📍 Interactive Map
         </Text>
-        <Text style={styles.mapPlaceholderSubtext}>
+        <Text style={themedStyles.mapPlaceholderSubtext}>
           Map view will show your location and nearby stations
         </Text>
         {userLocation && (
-          <Text style={styles.coordinatesText}>
+          <Text style={themedStyles.coordinatesText}>
             {mapService.formatLocationForDisplay(userLocation.latitude, userLocation.longitude)}
           </Text>
         )}
@@ -274,6 +340,295 @@ export function MapScreen() {
     </View>
   );
 }
+
+const createThemedStyles = (colors: any) => StyleSheet.create({
+  container: {
+    flex: 1,
+    backgroundColor: colors.background,
+    paddingTop: 50,
+    paddingHorizontal: 16,
+  },
+  header: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    marginBottom: 20,
+  },
+  title: {
+    fontSize: 24,
+    fontWeight: 'bold',
+    color: colors.text,
+    flex: 1,
+    textAlign: 'center',
+  },
+  themeButton: {
+    backgroundColor: colors.surface,
+    paddingHorizontal: 12,
+    paddingVertical: 8,
+    borderRadius: 20,
+    borderWidth: 1,
+    borderColor: colors.border,
+  },
+  themeButtonText: {
+    fontSize: 18,
+  },
+  locationSection: {
+    marginBottom: 24,
+    padding: 16,
+    backgroundColor: colors.surface,
+    borderRadius: 8,
+  },
+  sectionTitle: {
+    fontSize: 18,
+    fontWeight: '600',
+    marginBottom: 8,
+    color: colors.text,
+  },
+  locationStatus: {
+    fontSize: 14,
+    color: colors.secondary,
+    marginBottom: 12,
+  },
+  locationButton: {
+    backgroundColor: colors.primary,
+    padding: 12,
+    borderRadius: 6,
+    alignItems: 'center',
+    marginBottom: 8,
+  },
+  buttonText: {
+    color: '#fff',
+    fontSize: 16,
+    fontWeight: '500',
+  },
+  offlineButton: {
+    backgroundColor: colors.secondary,
+  },
+  offlineButtonActive: {
+    backgroundColor: colors.accent,
+  },
+  offlineButtonText: {
+    fontWeight: '600',
+  },
+  offlineIndicator: {
+    fontSize: 14,
+    color: colors.warning,
+    fontWeight: '600',
+  },
+  stationsSection: {
+    flex: 1,
+    marginBottom: 16,
+  },
+  stationsList: {
+    flex: 1,
+  },
+  stationItem: {
+    backgroundColor: colors.background,
+    padding: 12,
+    marginBottom: 8,
+    borderRadius: 6,
+    borderLeftWidth: 3,
+    borderLeftColor: colors.primary,
+    elevation: 1,
+    shadowColor: colors.text,
+    shadowOffset: { width: 0, height: 1 },
+    shadowOpacity: 0.1,
+    shadowRadius: 2,
+    borderWidth: 1,
+    borderColor: colors.border,
+  },
+  stationHeader: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    marginBottom: 4,
+  },
+  stationName: {
+    fontSize: 16,
+    fontWeight: '600',
+    color: colors.text,
+    flex: 1,
+  },
+  stationMeta: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+  },
+  stationDistance: {
+    fontSize: 14,
+    color: colors.primary,
+    fontWeight: '500',
+  },
+  statusIndicator: {
+    width: 8,
+    height: 8,
+    borderRadius: 4,
+  },
+  statusText: {
+    fontSize: 12,
+    fontWeight: '600',
+    textTransform: 'uppercase',
+  },
+  stationLines: {
+    fontSize: 12,
+    color: colors.secondary,
+  },
+  noStationsText: {
+    textAlign: 'center',
+    color: colors.secondary,
+    fontStyle: 'italic',
+    marginTop: 20,
+  },
+  mapPlaceholder: {
+    height: 200,
+    backgroundColor: theme === 'dark' ? '#2d4a3a' : '#e8f4f8',
+    borderRadius: 8,
+    justifyContent: 'center',
+    alignItems: 'center',
+    borderWidth: 2,
+    borderColor: colors.primary,
+    borderStyle: 'dashed',
+  },
+  mapPlaceholderText: {
+    fontSize: 18,
+    fontWeight: '600',
+    color: colors.primary,
+    marginBottom: 4,
+  },
+  mapPlaceholderSubtext: {
+    fontSize: 12,
+    color: colors.secondary,
+    textAlign: 'center',
+    marginBottom: 8,
+  },
+  coordinatesText: {
+    fontSize: 12,
+    color: colors.primary,
+    fontFamily: 'monospace',
+  },
+  delaysContainer: {
+    marginTop: 8,
+    paddingTop: 8,
+    borderTopWidth: 1,
+    borderTopColor: colors.border,
+  },
+  delayText: {
+    fontSize: 11,
+    color: colors.warning,
+    marginBottom: 2,
+    fontWeight: '500',
+  },
+  lastUpdated: {
+    fontSize: 10,
+    color: colors.secondary,
+    marginTop: 4,
+    fontStyle: 'italic',
+  },
+  routeButton: {
+    backgroundColor: colors.primary,
+    padding: 8,
+    borderRadius: 4,
+    marginTop: 8,
+    alignItems: 'center',
+  },
+  routeButtonText: {
+    color: '#fff',
+    fontSize: 12,
+    fontWeight: '500',
+  },
+  routeSection: {
+    marginBottom: 16,
+    padding: 16,
+    backgroundColor: theme === 'dark' ? '#2d4a3a' : '#e8f4f8',
+    borderRadius: 8,
+    borderLeftWidth: 4,
+    borderLeftColor: colors.primary,
+  },
+  routeSummary: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    marginBottom: 12,
+    flexWrap: 'wrap',
+  },
+  routeTime: {
+    fontSize: 14,
+    fontWeight: '600',
+    color: colors.primary,
+  },
+  routeDistance: {
+    fontSize: 14,
+    fontWeight: '600',
+    color: colors.accent,
+  },
+  routeTransfers: {
+    fontSize: 14,
+    fontWeight: '600',
+    color: colors.warning,
+  },
+  directionsButton: {
+    backgroundColor: colors.accent,
+    padding: 10,
+    borderRadius: 6,
+    alignItems: 'center',
+  },
+  directionsButtonText: {
+    color: '#fff',
+    fontSize: 14,
+    fontWeight: '600',
+  },
+  directionsSection: {
+    marginBottom: 16,
+  },
+  directionsList: {
+    maxHeight: 200,
+    marginBottom: 8,
+  },
+  directionStep: {
+    flexDirection: 'row',
+    alignItems: 'flex-start',
+    marginBottom: 12,
+    backgroundColor: colors.surface,
+    padding: 12,
+    borderRadius: 6,
+  },
+  stepNumber: {
+    width: 24,
+    height: 24,
+    borderRadius: 12,
+    backgroundColor: colors.primary,
+    justifyContent: 'center',
+    alignItems: 'center',
+    marginRight: 12,
+  },
+  stepNumberText: {
+    color: '#fff',
+    fontSize: 12,
+    fontWeight: 'bold',
+  },
+  stepContent: {
+    flex: 1,
+  },
+  stepInstruction: {
+    fontSize: 14,
+    color: colors.text,
+    lineHeight: 20,
+    marginBottom: 2,
+  },
+  stepDuration: {
+    fontSize: 12,
+    color: colors.secondary,
+  },
+  hideDirectionsButton: {
+    backgroundColor: colors.secondary,
+    padding: 8,
+    borderRadius: 4,
+    alignItems: 'center',
+  },
+  hideDirectionsButtonText: {
+    color: '#fff',
+    fontSize: 12,
+  },
+});
 
 const styles = StyleSheet.create({
   container: {
@@ -310,11 +665,26 @@ const styles = StyleSheet.create({
     padding: 12,
     borderRadius: 6,
     alignItems: 'center',
+    marginBottom: 8,
   },
   buttonText: {
     color: '#fff',
     fontSize: 16,
     fontWeight: '500',
+  },
+  offlineButton: {
+    backgroundColor: '#6c757d',
+  },
+  offlineButtonActive: {
+    backgroundColor: '#28a745',
+  },
+  offlineButtonText: {
+    fontWeight: '600',
+  },
+  offlineIndicator: {
+    fontSize: 14,
+    color: '#fd7e14',
+    fontWeight: '600',
   },
   stationsSection: {
     flex: 1,

@@ -2,6 +2,7 @@ import { LocationService } from '../../services/LocationService';
 import { StationFinderService } from '../../services/StationFinderService';
 import { TokyoODPTService, StationStatus } from '../../services/TokyoODPTService';
 import { RouteCalculationService, RouteOption, Route } from '../../services/RouteCalculationService';
+import { OfflineMapService, SubwayStation as OfflineSubwayStation, GeographicBounds } from '../../services/OfflineMapService';
 
 interface UserLocation {
   latitude: number;
@@ -49,11 +50,19 @@ interface DirectionStep {
   toStation?: string;
 }
 
+interface OfflineStationsResult {
+  success: boolean;
+  stations?: StationWithStatus[];
+  fromCache: boolean;
+  error?: string;
+}
+
 export class MapScreenService {
   private locationService: LocationService;
   private stationFinder: StationFinderService;
   private odptService?: TokyoODPTService;
   private routeService?: RouteCalculationService;
+  public offlineMapService: OfflineMapService;
   private defaultLocation: UserLocation = {
     latitude: 35.6762, // Tokyo Station
     longitude: 139.6503
@@ -64,6 +73,7 @@ export class MapScreenService {
     this.stationFinder = new StationFinderService(locationService);
     this.odptService = odptService;
     this.routeService = routeService;
+    this.offlineMapService = new OfflineMapService();
   }
 
   async getUserLocation(): Promise<LocationResult> {
@@ -288,5 +298,61 @@ export class MapScreenService {
     });
 
     return directions;
+  }
+
+  async findNearbyStationsWithOffline(userLocation: UserLocation, radiusKm: number = 5.0): Promise<OfflineStationsResult> {
+    try {
+      // Try to get cached data first
+      const cachedResult = await this.offlineMapService.getCachedSubwayMap();
+      
+      if (cachedResult.success && cachedResult.data) {
+        // Use cached data to find nearby stations
+        const bounds: GeographicBounds = {
+          north: userLocation.latitude + (radiusKm / 111), // Rough km to degrees conversion
+          south: userLocation.latitude - (radiusKm / 111),
+          east: userLocation.longitude + (radiusKm / (111 * Math.cos(userLocation.latitude * Math.PI / 180))),
+          west: userLocation.longitude - (radiusKm / (111 * Math.cos(userLocation.latitude * Math.PI / 180)))
+        };
+
+        const stationsResult = await this.offlineMapService.getStationsByArea(bounds);
+        
+        if (stationsResult.success && stationsResult.data) {
+          // Convert offline stations to StationWithStatus format
+          const stationsWithStatus: StationWithStatus[] = stationsResult.data.map(station => ({
+            name: station.name,
+            latitude: station.latitude,
+            longitude: station.longitude,
+            distance: Math.round(this.locationService.calculateDistance(
+              userLocation.latitude, userLocation.longitude,
+              station.latitude, station.longitude
+            ) * 10) / 10,
+            lines: station.lines,
+            status: 'Unknown', // Default status when using cached data
+            delays: [],
+            lastUpdated: new Date().toISOString()
+          }));
+
+          return {
+            success: true,
+            stations: stationsWithStatus,
+            fromCache: true,
+            error: 'API unavailable, using cached data'
+          };
+        }
+      }
+
+      // No cache available and no API fallback implemented yet
+      return {
+        success: false,
+        fromCache: false,
+        error: 'No cached data available and API failed'
+      };
+    } catch (error) {
+      return {
+        success: false,
+        fromCache: false,
+        error: `Failed to find stations: ${(error as Error).message}`
+      };
+    }
   }
 }
