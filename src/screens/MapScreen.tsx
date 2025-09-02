@@ -208,7 +208,7 @@ export function MapScreen() {
     }
   };
 
-  const themedStyles = createThemedStyles(colors);
+  const themedStyles = createThemedStyles(colors, theme);
   
   return (
     <View style={[themedStyles.container]} testID="map-container">
@@ -341,7 +341,7 @@ export function MapScreen() {
   );
 }
 
-const createThemedStyles = (colors: any) => StyleSheet.create({
+const createThemedStyles = (colors: any, theme: string) => StyleSheet.create({
   container: {
     flex: 1,
     backgroundColor: colors.background,
