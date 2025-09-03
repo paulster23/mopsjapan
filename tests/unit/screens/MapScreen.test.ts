@@ -11,21 +11,13 @@ jest.mock('../../../src/services/RouteCalculationService');
 describe('MapScreenService', () => {
   beforeEach(() => {
     jest.clearAllMocks();
+    // Reset global navigator to undefined before each test
+    delete (global as any).navigator;
   });
 
   describe('getUserLocation', () => {
     it('should request user location and validate coordinates', async () => {
-      const mockLocationService = new LocationService() as jest.Mocked<LocationService>;
-      mockLocationService.validateCoordinates.mockReturnValue({
-        isValid: true,
-        latitude: 35.6762,
-        longitude: 139.6503
-      });
-      mockLocationService.isInJapan.mockReturnValue(true);
-
-      const mapService = new MapScreenService(mockLocationService);
-      
-      // Mock geolocation API
+      // Mock geolocation API FIRST before any service instantiation
       const mockGeolocation = {
         getCurrentPosition: jest.fn((success) => {
           success({
@@ -41,6 +33,16 @@ describe('MapScreenService', () => {
       // @ts-ignore
       global.navigator = { geolocation: mockGeolocation };
 
+      const mockLocationService = new LocationService() as jest.Mocked<LocationService>;
+      mockLocationService.validateCoordinates.mockReturnValue({
+        isValid: true,
+        latitude: 35.6762,
+        longitude: 139.6503
+      });
+      mockLocationService.isInJapan.mockReturnValue(true);
+
+      const mapService = new MapScreenService(mockLocationService);
+
       const result = await mapService.getUserLocation();
 
       expect(result.success).toBe(true);
@@ -52,9 +54,7 @@ describe('MapScreenService', () => {
     });
 
     it('should handle location permission denied', async () => {
-      const mockLocationService = new LocationService() as jest.Mocked<LocationService>;
-      const mapService = new MapScreenService(mockLocationService);
-      
+      // Mock geolocation API FIRST before any service instantiation
       const mockGeolocation = {
         getCurrentPosition: jest.fn((success, error) => {
           error({
@@ -67,6 +67,9 @@ describe('MapScreenService', () => {
       // @ts-ignore
       global.navigator = { geolocation: mockGeolocation };
 
+      const mockLocationService = new LocationService() as jest.Mocked<LocationService>;
+      const mapService = new MapScreenService(mockLocationService);
+
       const result = await mapService.getUserLocation();
 
       expect(result.success).toBe(false);
@@ -74,16 +77,7 @@ describe('MapScreenService', () => {
     });
 
     it('should validate location is in Japan', async () => {
-      const mockLocationService = new LocationService() as jest.Mocked<LocationService>;
-      mockLocationService.validateCoordinates.mockReturnValue({
-        isValid: true,
-        latitude: 40.7128,
-        longitude: -74.0060
-      });
-      mockLocationService.isInJapan.mockReturnValue(false);
-
-      const mapService = new MapScreenService(mockLocationService);
-      
+      // Mock geolocation API FIRST before any service instantiation
       const mockGeolocation = {
         getCurrentPosition: jest.fn((success) => {
           success({
@@ -98,6 +92,16 @@ describe('MapScreenService', () => {
       
       // @ts-ignore
       global.navigator = { geolocation: mockGeolocation };
+
+      const mockLocationService = new LocationService() as jest.Mocked<LocationService>;
+      mockLocationService.validateCoordinates.mockReturnValue({
+        isValid: true,
+        latitude: 40.7128,
+        longitude: -74.0060
+      });
+      mockLocationService.isInJapan.mockReturnValue(false);
+
+      const mapService = new MapScreenService(mockLocationService);
 
       const result = await mapService.getUserLocation();
 
