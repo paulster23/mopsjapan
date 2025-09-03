@@ -27,8 +27,13 @@ if (Platform.OS === 'web') {
   // Native platforms - use actual react-native-maps
   try {
     const maps = require('react-native-maps');
-    MapView = maps.default;
+    MapView = maps.default || maps;
     Marker = maps.Marker;
+    
+    // Verify components are actually usable
+    if (!MapView || !Marker) {
+      throw new Error('MapView or Marker not found in react-native-maps');
+    }
   } catch (error) {
     console.warn('react-native-maps not available, using fallback');
     MapView = View;
