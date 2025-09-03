@@ -115,4 +115,53 @@ export class DataPersistenceService {
       };
     }
   }
+
+  async saveGenericData(key: string, data: any): Promise<PersistenceResult> {
+    try {
+      await this.storage.setItem(key, JSON.stringify(data));
+      return { success: true };
+    } catch (error) {
+      return {
+        success: false,
+        error: error instanceof Error ? error.message : 'Unknown error'
+      };
+    }
+  }
+
+  async loadGenericData<T = any>(key: string): Promise<PersistenceResult<T | null>> {
+    try {
+      const data = await this.storage.getItem(key);
+      
+      if (!data) {
+        return { success: true, data: null };
+      }
+
+      try {
+        const parsedData = JSON.parse(data);
+        return { success: true, data: parsedData };
+      } catch (parseError) {
+        return {
+          success: false,
+          error: 'Failed to parse data'
+        };
+      }
+    } catch (error) {
+      return {
+        success: false,
+        error: error instanceof Error ? error.message : 'Unknown error'
+      };
+    }
+  }
+
+  async removeGenericData(key: string): Promise<PersistenceResult> {
+    try {
+      await this.storage.removeItem(key);
+      return { success: true };
+    } catch (error) {
+      return {
+        success: false,
+        error: error instanceof Error ? error.message : 'Unknown error'
+      };
+    }
+  }
 }
