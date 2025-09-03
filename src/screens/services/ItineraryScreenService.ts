@@ -216,4 +216,78 @@ export class ItineraryScreenService {
     
     return updatedItinerary;
   }
+
+  getCurrentStep(itinerary: DaySchedule[]): { dayIndex: number; entryIndex: number; isToday: boolean; isUpcoming: boolean } | null {
+    const now = new Date();
+    const today = now.toISOString().split('T')[0]; // YYYY-MM-DD format
+    const currentTime = now.toTimeString().substring(0, 5); // HH:MM format
+
+    for (let dayIndex = 0; dayIndex < itinerary.length; dayIndex++) {
+      const day = itinerary[dayIndex];
+      
+      for (let entryIndex = 0; entryIndex < day.entries.length; entryIndex++) {
+        const entry = day.entries[entryIndex];
+        
+        // If this is today
+        if (day.date === today) {
+          // If entry has a time, check if it's in the future
+          if (entry.time) {
+            const entryTime = this.convertTimeToComparable(entry.time);
+            const currentTimeComparable = this.convertTimeToComparable(currentTime);
+            
+            if (entryTime > currentTimeComparable) {
+              return { dayIndex, entryIndex, isToday: true, isUpcoming: true };
+            }
+          } else {
+            // If no time specified, consider it current if it's today
+            return { dayIndex, entryIndex, isToday: true, isUpcoming: false };
+          }
+        }
+        
+        // If this is a future date
+        if (day.date > today) {
+          return { dayIndex, entryIndex, isToday: false, isUpcoming: true };
+        }
+      }
+    }
+
+    return null; // All entries are in the past
+  }
+
+  private convertTimeToComparable(timeString: string): string {
+    // Convert times like "2:20pm" to "14:20" for comparison
+    const match = timeString.match(/(\d{1,2}):(\d{2})(am|pm)/i);
+    if (!match) return timeString;
+    
+    let [, hours, minutes, period] = match;
+    let hour24 = parseInt(hours);
+    
+    if (period.toLowerCase() === 'pm' && hour24 !== 12) {
+      hour24 += 12;
+    } else if (period.toLowerCase() === 'am' && hour24 === 12) {
+      hour24 = 0;
+    }
+    
+    return `${hour24.toString().padStart(2, '0')}:${minutes}`;
+  }
+
+  getNextStep(itinerary: DaySchedule[], currentStep: { dayIndex: number; entryIndex: number } | null): { dayIndex: number; entryIndex: number } | null {
+    if (!currentStep) {
+      return this.getCurrentStep(itinerary);
+    }
+
+    const { dayIndex, entryIndex } = currentStep;
+    
+    // Try next entry in same day
+    if (entryIndex + 1 < itinerary[dayIndex].entries.length) {
+      return { dayIndex, entryIndex: entryIndex + 1 };
+    }
+    
+    // Try first entry of next day
+    if (dayIndex + 1 < itinerary.length) {
+      return { dayIndex: dayIndex + 1, entryIndex: 0 };
+    }
+    
+    return null; // No next step available
+  }
 }

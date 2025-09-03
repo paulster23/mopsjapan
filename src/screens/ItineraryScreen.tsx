@@ -1,6 +1,8 @@
 import React, { useEffect, useState } from 'react';
 import { View, Text, ScrollView, StyleSheet, TouchableOpacity, Alert, Modal, TextInput } from 'react-native';
+import AsyncStorage from '@react-native-async-storage/async-storage';
 import { ItineraryScreenService } from './services/ItineraryScreenService';
+import { DataPersistenceService } from '../services/DataPersistenceService';
 
 interface DaySchedule {
   date: string;
@@ -36,7 +38,15 @@ export function ItineraryScreen() {
     type: 'event',
     description: ''
   });
+  const [currentStep, setCurrentStep] = useState<{ dayIndex: number; entryIndex: number; isToday: boolean; isUpcoming: boolean } | null>(null);
+  const [nextStep, setNextStep] = useState<{ dayIndex: number; entryIndex: number } | null>(null);
   const service = new ItineraryScreenService();
+  const persistenceService = new DataPersistenceService({
+    getItem: AsyncStorage.getItem,
+    setItem: AsyncStorage.setItem,
+    removeItem: AsyncStorage.removeItem,
+    clear: AsyncStorage.clear
+  });
 
   useEffect(() => {
     loadItinerary();
@@ -44,14 +54,48 @@ export function ItineraryScreen() {
 
   const loadItinerary = async () => {
     try {
-      const parsedItinerary = await service.loadRealJapanScheduleForScreen();
-      setItinerary(parsedItinerary);
+      // First try to load from cache
+      const cachedResult = await persistenceService.loadItinerary();
+      if (cachedResult.success && cachedResult.data && cachedResult.data.length > 0) {
+        setItinerary(cachedResult.data);
+        updateCurrentAndNextSteps(cachedResult.data);
+        setLoading(false);
+        // Still load fresh data in background
+        loadFreshItinerary();
+        return;
+      }
+
+      // Load fresh data if no cache available
+      await loadFreshItinerary();
     } catch (error) {
-      console.error('Failed to load real Japan itinerary:', error);
+      console.error('Failed to load itinerary:', error);
       setItinerary([]);
     } finally {
       setLoading(false);
     }
+  };
+
+  const loadFreshItinerary = async () => {
+    try {
+      const parsedItinerary = await service.loadRealJapanScheduleForScreen();
+      if (parsedItinerary.length > 0) {
+        setItinerary(parsedItinerary);
+        // Update current and next steps
+        updateCurrentAndNextSteps(parsedItinerary);
+        // Cache the loaded data
+        await persistenceService.saveItinerary(parsedItinerary);
+      }
+    } catch (error) {
+      console.error('Failed to load fresh itinerary:', error);
+    }
+  };
+
+  const updateCurrentAndNextSteps = (itineraryData: DaySchedule[]) => {
+    const current = service.getCurrentStep(itineraryData);
+    setCurrentStep(current);
+    
+    const next = service.getNextStep(itineraryData, current);
+    setNextStep(next);
   };
 
   const handleAddEntry = (dayDate: string) => {
@@ -75,16 +119,19 @@ export function ItineraryScreen() {
         {
           text: 'Delete',
           style: 'destructive',
-          onPress: () => {
+          onPress: async () => {
             const updatedItinerary = service.deleteEntry(itinerary, dayDate, entryIndex);
             setItinerary(updatedItinerary);
+            updateCurrentAndNextSteps(updatedItinerary);
+            // Persist changes
+            await persistenceService.saveItinerary(updatedItinerary);
           }
         }
       ]
     );
   };
 
-  const handleSaveEntry = (dayDate: string) => {
+  const handleSaveEntry = async (dayDate: string) => {
     if (!newEntry.description.trim()) {
       Alert.alert('Error', 'Description is required');
       return;
@@ -107,8 +154,12 @@ export function ItineraryScreen() {
     }
     
     setItinerary(updatedItinerary);
+    updateCurrentAndNextSteps(updatedItinerary);
     setShowEntryModal(false);
     setEditingEntry(null);
+    
+    // Persist changes
+    await persistenceService.saveItinerary(updatedItinerary);
   };
 
   const handleCancelEdit = () => {
@@ -148,6 +199,52 @@ export function ItineraryScreen() {
           </Text>
         </TouchableOpacity>
       </View>
+
+      {/* Current Activity and Next Up Sections */}
+      {(currentStep || nextStep) && (
+        <View style={styles.guidanceContainer}>
+          {currentStep && (
+            <View style={styles.currentActivityContainer}>
+              <Text style={styles.guidanceTitle}>📍 {currentStep.isToday ? 'Current Activity' : 'Next Activity'}</Text>
+              <View style={[styles.guidanceEntry, styles.currentEntry]}>
+                <View style={styles.guidanceEntryHeader}>
+                  {itinerary[currentStep.dayIndex].entries[currentStep.entryIndex].time && (
+                    <Text style={styles.guidanceTime}>{itinerary[currentStep.dayIndex].entries[currentStep.entryIndex].time}</Text>
+                  )}
+                  <View style={[styles.guidanceTypeIndicator, { backgroundColor: service.getEntryTypeColor(itinerary[currentStep.dayIndex].entries[currentStep.entryIndex].type) }]} />
+                  <Text style={styles.guidanceDate}>{service.formatDate(itinerary[currentStep.dayIndex].date)}</Text>
+                </View>
+                <Text style={styles.guidanceDescription}>
+                  {itinerary[currentStep.dayIndex].entries[currentStep.entryIndex].description}
+                </Text>
+                {currentStep.isToday && currentStep.isUpcoming && (
+                  <TouchableOpacity style={styles.navigateButton}>
+                    <Text style={styles.navigateButtonText}>🗺️ Navigate Here</Text>
+                  </TouchableOpacity>
+                )}
+              </View>
+            </View>
+          )}
+
+          {nextStep && !(currentStep && currentStep.dayIndex === nextStep.dayIndex && currentStep.entryIndex === nextStep.entryIndex) && (
+            <View style={styles.nextUpContainer}>
+              <Text style={styles.guidanceTitle}>⏭️ Next Up</Text>
+              <View style={[styles.guidanceEntry, styles.nextEntry]}>
+                <View style={styles.guidanceEntryHeader}>
+                  {itinerary[nextStep.dayIndex].entries[nextStep.entryIndex].time && (
+                    <Text style={styles.guidanceTime}>{itinerary[nextStep.dayIndex].entries[nextStep.entryIndex].time}</Text>
+                  )}
+                  <View style={[styles.guidanceTypeIndicator, { backgroundColor: service.getEntryTypeColor(itinerary[nextStep.dayIndex].entries[nextStep.entryIndex].type) }]} />
+                  <Text style={styles.guidanceDate}>{service.formatDate(itinerary[nextStep.dayIndex].date)}</Text>
+                </View>
+                <Text style={styles.guidanceDescription}>
+                  {service.truncateText(itinerary[nextStep.dayIndex].entries[nextStep.entryIndex].description, 80)}
+                </Text>
+              </View>
+            </View>
+          )}
+        </View>
+      )}
       
       <ScrollView style={styles.scrollContainer}>
         {itinerary.map((day, dayIndex) => (
@@ -164,8 +261,16 @@ export function ItineraryScreen() {
               )}
             </View>
             
-            {day.entries.map((entry, entryIndex) => (
-              <View key={entryIndex} style={styles.entryContainer}>
+            {day.entries.map((entry, entryIndex) => {
+              const isCurrent = currentStep?.dayIndex === dayIndex && currentStep?.entryIndex === entryIndex;
+              const isNext = nextStep?.dayIndex === dayIndex && nextStep?.entryIndex === entryIndex;
+              
+              return (
+              <View key={entryIndex} style={[
+                styles.entryContainer,
+                isCurrent && styles.currentEntryContainer,
+                isNext && !isCurrent && styles.nextEntryContainer
+              ]}>
                 <View style={styles.entryHeader}>
                   {entry.time && (
                     <Text style={styles.timeText}>{entry.time}</Text>
@@ -193,7 +298,8 @@ export function ItineraryScreen() {
                   {service.truncateText(entry.description, 100)}
                 </Text>
               </View>
-            ))}
+              );
+            })}
           </View>
         ))}
       </ScrollView>
@@ -463,5 +569,90 @@ const styles = StyleSheet.create({
     color: '#fff',
     fontSize: 16,
     fontWeight: '600',
+  },
+  // Navigation Guidance Styles
+  guidanceContainer: {
+    paddingHorizontal: 16,
+    paddingVertical: 8,
+  },
+  currentActivityContainer: {
+    marginBottom: 12,
+  },
+  nextUpContainer: {
+    marginBottom: 12,
+  },
+  guidanceTitle: {
+    fontSize: 16,
+    fontWeight: '600',
+    color: '#333',
+    marginBottom: 8,
+  },
+  guidanceEntry: {
+    backgroundColor: '#fff',
+    borderRadius: 8,
+    padding: 12,
+    elevation: 2,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.1,
+    shadowRadius: 4,
+  },
+  currentEntry: {
+    borderLeftWidth: 4,
+    borderLeftColor: '#4CAF50',
+  },
+  nextEntry: {
+    borderLeftWidth: 4,
+    borderLeftColor: '#FF9800',
+  },
+  guidanceEntryHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginBottom: 8,
+  },
+  guidanceTime: {
+    fontSize: 14,
+    fontWeight: '500',
+    color: '#666',
+    marginRight: 8,
+  },
+  guidanceDate: {
+    fontSize: 12,
+    color: '#999',
+    marginLeft: 8,
+  },
+  guidanceTypeIndicator: {
+    width: 8,
+    height: 8,
+    borderRadius: 4,
+    marginRight: 4,
+  },
+  guidanceDescription: {
+    fontSize: 14,
+    color: '#333',
+    lineHeight: 18,
+    marginBottom: 8,
+  },
+  navigateButton: {
+    backgroundColor: '#007AFF',
+    paddingHorizontal: 12,
+    paddingVertical: 6,
+    borderRadius: 16,
+    alignSelf: 'flex-start',
+  },
+  navigateButtonText: {
+    color: '#fff',
+    fontSize: 12,
+    fontWeight: '500',
+  },
+  currentEntryContainer: {
+    borderLeftWidth: 4,
+    borderLeftColor: '#4CAF50',
+    backgroundColor: '#E8F5E8',
+  },
+  nextEntryContainer: {
+    borderLeftWidth: 4,
+    borderLeftColor: '#FF9800',
+    backgroundColor: '#FFF8E1',
   },
 });

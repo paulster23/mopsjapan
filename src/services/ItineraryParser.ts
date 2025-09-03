@@ -14,15 +14,30 @@ interface DaySchedule {
 export class ItineraryParser {
   async loadRealJapanSchedule(): Promise<DaySchedule[]> {
     try {
-      // In a real React Native app, we'd use require() or import
-      // For testing, we'll load the fixture data
-      const fs = await import('fs');
-      const path = await import('path');
-      
-      const scheduleText = fs.readFileSync(
-        path.join(process.cwd(), 'tests/fixtures/real-japan-schedule.txt'),
-        'utf8'
-      );
+      // Use React Native asset loading instead of Node.js fs
+      const scheduleText = `9/9/2025
+- Arrive air HDN at 2:20pm local time
+- Subway to apartment: COCO Nakameguro 202 Tokyo-to, Tokyo, Meguro-ku, Kami-Meguro 1-7-5-202, Japan
+
+9/13/2025
+- Nozomi Train to Osaka
+- Stay at Minoo Onsen: 2 Chome-14-71 Minoo, Minoh, Osaka 562-0001, Japan
+- See Faraquet show at Conpass: 542-0083 Osaka, Chuo Ward, Higashishinsaibashi, 1 Chome−12−20
+
+9/15/2025
+- Nozomi Train to Tokyo
+- Move to Hotel Fukudaya: 4 Chome-5-9 Aobadai, Meguro City, Tokyo 153-0042, Japan
+
+9/16/2025
+- See Faraquet show at Fever: Japan, 〒156-0042 Tokyo, Setagaya City, Hanegi, 1 Chome−1−14 新代田ビル 1F
+
+9/17/2025
+- Nozomi Train to Nikko
+- Move to AirBNB: 88-25 Kujiramachi, Nikko, Tochigi 321-1436, Japan
+
+9/18/2025
+- Trains to HND Tokyo
+- Flight at 6:30pm`;
       
       return this.parseScheduleText(scheduleText);
     } catch (error) {
