@@ -1,6 +1,7 @@
 import React, { useEffect, useState } from 'react';
-import { View, Text, StyleSheet, ScrollView, TouchableOpacity, RefreshControl } from 'react-native';
+import { View, Text, StyleSheet, ScrollView, TouchableOpacity, RefreshControl, Alert } from 'react-native';
 import { exec } from 'child_process';
+import { StorageMonitorService } from '../services/StorageMonitorService';
 
 interface TestSuiteStats {
   totalTests: number;
@@ -22,6 +23,20 @@ interface ServiceHealth {
   details: string;
 }
 
+interface StorageQuota {
+  total: number;
+  used: number;
+  available: number;
+  usagePercentage: number;
+  isNearLimit: boolean;
+  isAtLimit: boolean;
+  breakdown: Array<{
+    key: string;
+    size: number;
+    sizeFormatted: string;
+  }>;
+}
+
 export function DebugScreen() {
   const [testStats, setTestStats] = useState<TestSuiteStats>({
     totalTests: 0,
@@ -30,8 +45,10 @@ export function DebugScreen() {
     suites: 0
   });
   const [serviceHealth, setServiceHealth] = useState<ServiceHealth[]>([]);
+  const [storageQuota, setStorageQuota] = useState<StorageQuota | null>(null);
   const [loading, setLoading] = useState(false);
   const [lastRefresh, setLastRefresh] = useState<Date>(new Date());
+  const storageMonitor = new StorageMonitorService();
 
   useEffect(() => {
     loadDebugInfo();
@@ -42,7 +59,8 @@ export function DebugScreen() {
     try {
       await Promise.all([
         loadTestSuiteHealth(),
-        loadServiceHealth()
+        loadServiceHealth(),
+        loadStorageQuota()
       ]);
       setLastRefresh(new Date());
     } catch (error) {
@@ -70,6 +88,15 @@ export function DebugScreen() {
   };
 
   const loadServiceHealth = async () => {
+    // Get real storage quota to determine DataPersistenceService status
+    const quota = await storageMonitor.getStorageQuota();
+    const persistenceStatus = quota.isAtLimit ? 'error' : quota.isNearLimit ? 'warning' : 'healthy';
+    const persistenceDetails = quota.isAtLimit 
+      ? `Storage quota exceeded (${quota.usagePercentage.toFixed(1)}%)`
+      : quota.isNearLimit
+      ? `Storage usage high (${quota.usagePercentage.toFixed(1)}%)`
+      : `Storage usage normal (${quota.usagePercentage.toFixed(1)}%)`;
+
     const services: ServiceHealth[] = [
       {
         name: 'GooglePlacesService',
@@ -97,12 +124,17 @@ export function DebugScreen() {
       },
       {
         name: 'DataPersistenceService',
-        status: 'error',
+        status: persistenceStatus,
         lastChecked: new Date(),
-        details: 'Local storage quota exceeded'
+        details: persistenceDetails
       }
     ];
     setServiceHealth(services);
+  };
+
+  const loadStorageQuota = async () => {
+    const quota = await storageMonitor.getStorageQuota();
+    setStorageQuota(quota);
   };
 
   const getStatusColor = (status: ServiceHealth['status']) => {
@@ -127,6 +159,63 @@ export function DebugScreen() {
     // In a real implementation, this would trigger Jest programmatically
     console.log('Running test suite...');
     loadTestSuiteHealth();
+  };
+
+  const handleClearAppStorage = () => {
+    Alert.alert(
+      'Clear App Storage',
+      'This will remove all locally stored data including itinerary and preferences. Are you sure?',
+      [
+        { text: 'Cancel', style: 'cancel' },
+        {
+          text: 'Clear',
+          style: 'destructive',
+          onPress: async () => {
+            const success = storageMonitor.clearAppStorage();
+            if (success) {
+              await loadDebugInfo(); // Refresh data
+              Alert.alert('Success', 'App storage cleared successfully');
+            } else {
+              Alert.alert('Error', 'Failed to clear app storage');
+            }
+          }
+        }
+      ]
+    );
+  };
+
+  const handleExportData = async () => {
+    try {
+      const exportData = storageMonitor.exportStorageData();
+      // In a real implementation, would save to file or share
+      console.log('Storage export data:', exportData);
+      Alert.alert('Export Complete', 'Storage data has been logged to console. In production, this would be saved to a file.');
+    } catch (error) {
+      Alert.alert('Export Error', 'Failed to export storage data');
+    }
+  };
+
+  const handleClearStorageItem = (key: string) => {
+    Alert.alert(
+      'Clear Storage Item',
+      `Remove "${key}" from storage?`,
+      [
+        { text: 'Cancel', style: 'cancel' },
+        {
+          text: 'Remove',
+          style: 'destructive',
+          onPress: async () => {
+            const success = storageMonitor.clearStorageItem(key);
+            if (success) {
+              await loadDebugInfo();
+              Alert.alert('Success', `"${key}" removed successfully`);
+            } else {
+              Alert.alert('Error', `Failed to remove "${key}"`);
+            }
+          }
+        }
+      ]
+    );
   };
 
   const testPassRate = testStats.totalTests > 0 
@@ -227,19 +316,96 @@ export function DebugScreen() {
         ))}
       </View>
 
+      {/* Storage Usage */}
+      {storageQuota && (
+        <View style={styles.section}>
+          <Text style={styles.sectionTitle}>💾 Storage Usage</Text>
+          
+          {/* Storage Overview */}
+          <View style={styles.storageOverview}>
+            <View style={styles.storageHeader}>
+              <Text style={styles.storageTitle}>
+                {storageMonitor.formatBytes(storageQuota.used)} / {storageMonitor.formatBytes(storageQuota.total)}
+              </Text>
+              <Text style={[styles.storagePercentage, { color: storageMonitor.getWarningColor(storageQuota.usagePercentage) }]}>
+                {storageQuota.usagePercentage.toFixed(1)}%
+              </Text>
+            </View>
+            
+            {/* Progress Bar */}
+            <View style={styles.progressBarContainer}>
+              <View 
+                style={[
+                  styles.progressBar, 
+                  { 
+                    width: `${Math.min(storageQuota.usagePercentage, 100)}%`,
+                    backgroundColor: storageMonitor.getWarningColor(storageQuota.usagePercentage)
+                  }
+                ]}
+              />
+            </View>
+            
+            {/* Warning Message */}
+            {storageQuota.isAtLimit && (
+              <Text style={styles.storageWarning}>⚠️ Storage quota exceeded! Clear data to free up space.</Text>
+            )}
+            {storageQuota.isNearLimit && !storageQuota.isAtLimit && (
+              <Text style={styles.storageWarning}>⚠️ Storage usage is high. Consider clearing unused data.</Text>
+            )}
+          </View>
+
+          {/* Storage Breakdown */}
+          <View style={styles.storageBreakdown}>
+            <Text style={styles.breakdownTitle}>Storage Breakdown</Text>
+            {storageQuota.breakdown.slice(0, 5).map((item, index) => (
+              <View key={index} style={styles.storageItem}>
+                <View style={styles.storageItemInfo}>
+                  <Text style={styles.storageItemKey} numberOfLines={1}>
+                    {item.key.length > 25 ? `${item.key.substring(0, 25)}...` : item.key}
+                  </Text>
+                  <Text style={styles.storageItemSize}>{item.sizeFormatted}</Text>
+                </View>
+                <TouchableOpacity 
+                  style={styles.clearItemButton}
+                  onPress={() => handleClearStorageItem(item.key)}
+                >
+                  <Text style={styles.clearItemButtonText}>Clear</Text>
+                </TouchableOpacity>
+              </View>
+            ))}
+            
+            {storageQuota.breakdown.length > 5 && (
+              <Text style={styles.moreItemsText}>
+                ... and {storageQuota.breakdown.length - 5} more items
+              </Text>
+            )}
+          </View>
+
+          {/* Storage Actions */}
+          <View style={styles.storageActions}>
+            <TouchableOpacity style={styles.storageButton} onPress={handleExportData}>
+              <Text style={styles.storageButtonText}>📤 Export Data</Text>
+            </TouchableOpacity>
+            <TouchableOpacity style={[styles.storageButton, styles.clearButton]} onPress={handleClearAppStorage}>
+              <Text style={[styles.storageButtonText, styles.clearButtonText]}>🗑️ Clear App Data</Text>
+            </TouchableOpacity>
+          </View>
+        </View>
+      )}
+
       {/* Debug Tools */}
       <View style={styles.section}>
         <Text style={styles.sectionTitle}>🔧 Debug Tools</Text>
         
-        <TouchableOpacity style={styles.debugButton}>
-          <Text style={styles.debugButtonText}>Clear App Cache</Text>
+        <TouchableOpacity style={styles.debugButton} onPress={() => loadDebugInfo()}>
+          <Text style={styles.debugButtonText}>Refresh All Data</Text>
         </TouchableOpacity>
         
-        <TouchableOpacity style={styles.debugButton}>
+        <TouchableOpacity style={styles.debugButton} onPress={handleExportData}>
           <Text style={styles.debugButtonText}>Export Debug Logs</Text>
         </TouchableOpacity>
         
-        <TouchableOpacity style={styles.debugButton}>
+        <TouchableOpacity style={styles.debugButton} onPress={handleClearAppStorage}>
           <Text style={styles.debugButtonText}>Reset to Default Settings</Text>
         </TouchableOpacity>
         
@@ -432,5 +598,117 @@ const styles = StyleSheet.create({
     color: '#666',
     marginBottom: 2,
     fontFamily: 'monospace',
+  },
+  // Storage monitoring styles
+  storageOverview: {
+    marginBottom: 16,
+  },
+  storageHeader: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    marginBottom: 8,
+  },
+  storageTitle: {
+    fontSize: 16,
+    fontWeight: 'bold',
+    color: '#333',
+  },
+  storagePercentage: {
+    fontSize: 16,
+    fontWeight: 'bold',
+  },
+  progressBarContainer: {
+    height: 8,
+    backgroundColor: '#E0E0E0',
+    borderRadius: 4,
+    marginBottom: 8,
+  },
+  progressBar: {
+    height: 8,
+    borderRadius: 4,
+  },
+  storageWarning: {
+    fontSize: 12,
+    color: '#F44336',
+    fontWeight: '500',
+    textAlign: 'center',
+  },
+  storageBreakdown: {
+    marginBottom: 16,
+  },
+  breakdownTitle: {
+    fontSize: 14,
+    fontWeight: '600',
+    color: '#333',
+    marginBottom: 8,
+  },
+  storageItem: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    paddingVertical: 6,
+    borderBottomWidth: 1,
+    borderBottomColor: '#F0F0F0',
+  },
+  storageItemInfo: {
+    flex: 1,
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    marginRight: 8,
+  },
+  storageItemKey: {
+    fontSize: 12,
+    color: '#333',
+    flex: 1,
+    fontFamily: 'monospace',
+  },
+  storageItemSize: {
+    fontSize: 12,
+    color: '#666',
+    fontWeight: '500',
+    marginLeft: 8,
+  },
+  clearItemButton: {
+    backgroundColor: '#F44336',
+    paddingHorizontal: 8,
+    paddingVertical: 4,
+    borderRadius: 4,
+  },
+  clearItemButtonText: {
+    color: '#fff',
+    fontSize: 10,
+    fontWeight: '500',
+  },
+  moreItemsText: {
+    fontSize: 12,
+    color: '#666',
+    textAlign: 'center',
+    marginTop: 8,
+    fontStyle: 'italic',
+  },
+  storageActions: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    gap: 8,
+  },
+  storageButton: {
+    flex: 1,
+    backgroundColor: '#2196F3',
+    padding: 12,
+    borderRadius: 6,
+    alignItems: 'center',
+  },
+  storageButtonText: {
+    color: '#fff',
+    fontSize: 12,
+    fontWeight: '500',
+  },
+  clearButton: {
+    backgroundColor: '#F44336',
+  },
+  clearButtonText: {
+    color: '#fff',
   },
 });
