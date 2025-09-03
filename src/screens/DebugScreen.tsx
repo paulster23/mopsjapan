@@ -1,7 +1,9 @@
 import React, { useEffect, useState } from 'react';
-import { View, Text, StyleSheet, ScrollView, TouchableOpacity, RefreshControl, Alert } from 'react-native';
+import { View, Text, StyleSheet, ScrollView, TouchableOpacity, RefreshControl, Alert, Switch } from 'react-native';
 import { exec } from 'child_process';
 import { StorageMonitorService } from '../services/StorageMonitorService';
+import { LocationOverrideService } from '../services/LocationOverrideService';
+import { DataPersistenceService } from '../services/DataPersistenceService';
 
 interface TestSuiteStats {
   totalTests: number;
@@ -48,7 +50,21 @@ export function DebugScreen() {
   const [storageQuota, setStorageQuota] = useState<StorageQuota | null>(null);
   const [loading, setLoading] = useState(false);
   const [lastRefresh, setLastRefresh] = useState<Date>(new Date());
+  
+  // Location Override State
+  const [locationOverrideActive, setLocationOverrideActive] = useState(false);
+  const [currentOverrideLocation, setCurrentOverrideLocation] = useState<string | null>(null);
+  const [availableLocations, setAvailableLocations] = useState<Array<{latitude: number, longitude: number, name: string}>>([]);
+  
   const storageMonitor = new StorageMonitorService();
+  const mockStorageAdapter = {
+    getItem: async (key: string) => null,
+    setItem: async (key: string, value: string) => {},
+    removeItem: async (key: string) => {},
+    clear: async () => {}
+  };
+  const dataService = new DataPersistenceService(mockStorageAdapter);
+  const locationOverrideService = new LocationOverrideService(dataService);
 
   useEffect(() => {
     loadDebugInfo();
@@ -60,7 +76,8 @@ export function DebugScreen() {
       await Promise.all([
         loadTestSuiteHealth(),
         loadServiceHealth(),
-        loadStorageQuota()
+        loadStorageQuota(),
+        loadLocationOverrideStatus()
       ]);
       setLastRefresh(new Date());
     } catch (error) {
@@ -159,6 +176,52 @@ export function DebugScreen() {
     // In a real implementation, this would trigger Jest programmatically
     console.log('Running test suite...');
     loadTestSuiteHealth();
+  };
+
+  const loadLocationOverrideStatus = async () => {
+    try {
+      await locationOverrideService.loadPersistedOverride();
+      const isActive = locationOverrideService.isOverrideActive();
+      const currentLocation = locationOverrideService.getOverrideLocation();
+      const presets = locationOverrideService.getPresetLocations();
+      
+      setLocationOverrideActive(isActive);
+      setCurrentOverrideLocation(currentLocation?.name || null);
+      setAvailableLocations(presets);
+    } catch (error) {
+      console.error('Error loading location override status:', error);
+    }
+  };
+
+  const handleLocationOverrideToggle = async (value: boolean) => {
+    try {
+      if (value) {
+        // Enable with default Tokyo Station
+        const tokyoStation = availableLocations.find(loc => loc.name === 'Tokyo Station');
+        if (tokyoStation) {
+          await locationOverrideService.enableLocationOverride(tokyoStation);
+          setLocationOverrideActive(true);
+          setCurrentOverrideLocation(tokyoStation.name);
+        }
+      } else {
+        // Disable override
+        await locationOverrideService.disableLocationOverride();
+        setLocationOverrideActive(false);
+        setCurrentOverrideLocation(null);
+      }
+    } catch (error) {
+      Alert.alert('Error', `Failed to ${value ? 'enable' : 'disable'} location override: ${error instanceof Error ? error.message : 'Unknown error'}`);
+    }
+  };
+
+  const handleLocationSelect = async (location: {latitude: number, longitude: number, name: string}) => {
+    try {
+      await locationOverrideService.enableLocationOverride(location);
+      setCurrentOverrideLocation(location.name);
+      setLocationOverrideActive(true);
+    } catch (error) {
+      Alert.alert('Error', `Failed to set location to ${location.name}: ${error instanceof Error ? error.message : 'Unknown error'}`);
+    }
   };
 
   const handleClearAppStorage = () => {
@@ -288,6 +351,71 @@ export function DebugScreen() {
                 <Text style={styles.coverageLabel}>Statements</Text>
                 <Text style={styles.coverageValue}>{testStats.coverage.statements}%</Text>
               </View>
+            </View>
+          </View>
+        )}
+      </View>
+
+      {/* Location Override */}
+      <View style={styles.section}>
+        <Text style={styles.sectionTitle}>📍 Location Override</Text>
+        <Text style={styles.sectionDescription}>
+          Override GPS location for testing Tokyo/Osaka functionality
+        </Text>
+        
+        <View style={styles.overrideRow}>
+          <View style={styles.overrideInfo}>
+            <Text style={styles.overrideLabel}>Location Override</Text>
+            <Text style={styles.overrideStatus}>
+              Status: {locationOverrideActive ? `Override - ${currentOverrideLocation}` : 'Using Real GPS'}
+            </Text>
+          </View>
+          <Switch
+            testID="location-override-toggle"
+            value={locationOverrideActive}
+            onValueChange={handleLocationOverrideToggle}
+            trackColor={{ false: '#767577', true: '#007AFF' }}
+            thumbColor={locationOverrideActive ? '#FFFFFF' : '#f4f3f4'}
+          />
+        </View>
+
+        {locationOverrideActive && (
+          <View style={styles.locationPicker}>
+            <Text style={styles.pickerLabel}>Select Location:</Text>
+            <View style={styles.locationButtons}>
+              {availableLocations.map((location, index) => (
+                <TouchableOpacity
+                  key={index}
+                  style={[
+                    styles.locationButton,
+                    currentOverrideLocation === location.name && styles.locationButtonActive
+                  ]}
+                  onPress={() => handleLocationSelect(location)}
+                >
+                  <Text style={[
+                    styles.locationButtonText,
+                    currentOverrideLocation === location.name && styles.locationButtonTextActive
+                  ]}>
+                    {location.name}
+                  </Text>
+                </TouchableOpacity>
+              ))}
+            </View>
+            
+            {/* Quick Action Buttons */}
+            <View style={styles.quickActions}>
+              <TouchableOpacity
+                style={styles.quickButton}
+                onPress={() => handleLocationSelect(availableLocations.find(l => l.name === 'Tokyo Station')!)}
+              >
+                <Text style={styles.quickButtonText}>Quick: Tokyo</Text>
+              </TouchableOpacity>
+              <TouchableOpacity
+                style={styles.quickButton}
+                onPress={() => handleLocationSelect(availableLocations.find(l => l.name === 'Osaka Station')!)}
+              >
+                <Text style={styles.quickButtonText}>Quick: Osaka</Text>
+              </TouchableOpacity>
             </View>
           </View>
         )}
@@ -710,5 +838,84 @@ const styles = StyleSheet.create({
   },
   clearButtonText: {
     color: '#fff',
+  },
+  
+  // Location Override Styles
+  sectionDescription: {
+    fontSize: 14,
+    color: '#666',
+    marginBottom: 16,
+    lineHeight: 18,
+  },
+  overrideRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    marginBottom: 16,
+  },
+  overrideInfo: {
+    flex: 1,
+  },
+  overrideLabel: {
+    fontSize: 16,
+    fontWeight: '600',
+    color: '#333',
+    marginBottom: 4,
+  },
+  overrideStatus: {
+    fontSize: 14,
+    color: '#666',
+  },
+  locationPicker: {
+    marginTop: 16,
+  },
+  pickerLabel: {
+    fontSize: 14,
+    fontWeight: '500',
+    color: '#333',
+    marginBottom: 12,
+  },
+  locationButtons: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: 8,
+    marginBottom: 16,
+  },
+  locationButton: {
+    backgroundColor: '#f0f0f0',
+    paddingHorizontal: 12,
+    paddingVertical: 8,
+    borderRadius: 16,
+    borderWidth: 1,
+    borderColor: '#e0e0e0',
+  },
+  locationButtonActive: {
+    backgroundColor: '#007AFF',
+    borderColor: '#007AFF',
+  },
+  locationButtonText: {
+    fontSize: 13,
+    color: '#333',
+    fontWeight: '500',
+  },
+  locationButtonTextActive: {
+    color: '#fff',
+  },
+  quickActions: {
+    flexDirection: 'row',
+    gap: 12,
+  },
+  quickButton: {
+    flex: 1,
+    backgroundColor: '#4CAF50',
+    paddingVertical: 12,
+    paddingHorizontal: 16,
+    borderRadius: 8,
+    alignItems: 'center',
+  },
+  quickButtonText: {
+    color: '#fff',
+    fontSize: 14,
+    fontWeight: '600',
   },
 });
