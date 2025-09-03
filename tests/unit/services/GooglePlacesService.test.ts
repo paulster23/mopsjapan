@@ -21,7 +21,7 @@ describe('GooglePlacesService', () => {
     it('should load places from custom Google My Maps data', () => {
       const places = service.loadCustomMapPlaces();
 
-      expect(places).toHaveLength(19); // Total places from the map
+      expect(places).toHaveLength(24); // Total places from the map (original 19 + 5 new)
       
       // Check accommodations
       const hotels = places.filter(p => p.category === 'accommodation');
@@ -31,13 +31,13 @@ describe('GooglePlacesService', () => {
       
       // Check restaurants
       const restaurants = places.filter(p => p.category === 'restaurant');
-      expect(restaurants).toHaveLength(4);
+      expect(restaurants).toHaveLength(6); // Original 4 + 2 new restaurants
       expect(restaurants.find(r => r.name === 'Shinjuku NINE SPICES')).toBeDefined();
       expect(restaurants.find(r => r.name === 'Gyukatsu Ichi Ni San')).toBeDefined();
       
       // Check entertainment venues
       const entertainment = places.filter(p => p.category === 'entertainment');
-      expect(entertainment).toHaveLength(3);
+      expect(entertainment).toHaveLength(5); // Original 3 + 2 new entertainment
       expect(entertainment.find(e => e.name === 'Live House Fever')).toBeDefined();
       
       // Check transport stations
@@ -66,7 +66,7 @@ describe('GooglePlacesService', () => {
       const restaurants = service.getPlacesByCategory('restaurant');
       const accommodations = service.getPlacesByCategory('accommodation');
       
-      expect(restaurants).toHaveLength(4);
+      expect(restaurants).toHaveLength(6); // Original 4 + 2 new restaurants
       expect(accommodations).toHaveLength(4);
       expect(restaurants.every(p => p.category === 'restaurant')).toBe(true);
       expect(accommodations.every(p => p.category === 'accommodation')).toBe(true);
@@ -250,12 +250,12 @@ describe('GooglePlacesService', () => {
     it('should return statistics about loaded places', () => {
       const stats = service.getPlaceStatistics();
       
-      expect(stats.total).toBe(19);
+      expect(stats.total).toBe(24); // Original 19 + 5 new places
       expect(stats.byCategory.accommodation).toBe(4);
-      expect(stats.byCategory.restaurant).toBe(4);
-      expect(stats.byCategory.entertainment).toBe(3);
+      expect(stats.byCategory.restaurant).toBe(6); // Original 4 + 2 new restaurants
+      expect(stats.byCategory.entertainment).toBe(5); // Original 3 + 2 new entertainment
       expect(stats.byCategory.transport).toBe(5);
-      expect(stats.byCategory.shopping).toBe(3);
+      expect(stats.byCategory.shopping).toBe(4); // Original 3 + 1 new shopping
       
       expect(stats.byCity.Tokyo).toBeGreaterThan(0);
       expect(stats.byCity.Osaka).toBeGreaterThan(0);

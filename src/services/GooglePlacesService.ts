@@ -190,6 +190,38 @@ export class GooglePlacesService {
         category: 'shopping',
         city: 'Tokyo',
         coordinates: { latitude: 35.6598, longitude: 139.7023 }
+      },
+      
+      // New places from Google Map
+      {
+        id: 'don-quijote-shibuya',
+        name: 'Don Quijote Shibuya',
+        category: 'shopping',
+        city: 'Tokyo'
+      },
+      {
+        id: 'sensoji-temple',
+        name: 'Sensoji Temple',
+        category: 'entertainment',
+        city: 'Tokyo'
+      },
+      {
+        id: 'meiji-shrine',
+        name: 'Meiji Shrine',
+        category: 'entertainment',
+        city: 'Tokyo'
+      },
+      {
+        id: 'tsukiji-outer-market',
+        name: 'Tsukiji Outer Market',
+        category: 'restaurant',
+        city: 'Tokyo'
+      },
+      {
+        id: 'golden-gai',
+        name: 'Golden Gai',
+        category: 'restaurant',
+        city: 'Tokyo'
       }
     ];
 
