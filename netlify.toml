@@ -1,8 +1,10 @@
 [build]
   # Build command for React Native / Expo web build
   command = "npm run build"
-  # Directory to publish (after build)
+  # Directory to publish (after build) - Expo exports to dist by default
   publish = "dist"
+  # Specify Node.js version for consistent builds
+  environment = { NODE_VERSION = "22" }
 
 [functions]
   # Directory where Netlify functions are located
