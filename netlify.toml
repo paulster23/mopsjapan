@@ -5,6 +5,16 @@
   publish = "dist"
   # Specify Node.js version for consistent builds
   environment = { NODE_VERSION = "22" }
+  # Ignore any build framework detection to prevent command override
+  ignore = "false"
+
+[build.processing]
+  # Skip framework detection and processing
+  skip_processing = false
+
+[build.environment]
+  # Force use of custom build command
+  EXPO_NO_AUTOSTART = "1"
 
 [functions]
   # Directory where Netlify functions are located

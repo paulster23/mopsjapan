@@ -1,4 +1,4 @@
-import { AppBootstrap } from '../../../src/app/AppBootstrap';
+import { AppBootstrap } from '../../../src/bootstrap/AppBootstrap';
 
 describe('AppBootstrap', () => {
   describe('validateConfiguration', () => {
