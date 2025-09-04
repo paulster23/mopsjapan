@@ -2,13 +2,6 @@ import React, { useEffect, useState } from 'react';
 import { View, Text, StyleSheet, TouchableOpacity, FlatList, TextInput, Modal, Alert } from 'react-native';
 import { GooglePlacesService, Place, PlaceCategory } from '../services/GooglePlacesService';
 import { LocationService } from '../services/LocationService';
-import { SyncStatus } from '../components/SyncStatus';
-import { MapSyncConfig } from '../services/MapSyncConfig';
-import { SyncStatusService } from '../services/SyncStatusService';
-import { EnhancedSyncService } from '../services/EnhancedSyncService';
-import { MyMapsImportService } from '../services/MyMapsImportService';
-import { NetlifyApiService } from '../services/NetlifyApiService';
-import { getNetlifyBaseUrl, getEnvironment, isDevelopment } from '../config/environment';
 
 export function PlacesScreen() {
   const [places, setPlaces] = useState<Place[]>([]);
@@ -20,7 +13,6 @@ export function PlacesScreen() {
   const [showAddModal, setShowAddModal] = useState(false);
   const [showStats, setShowStats] = useState(false);
   const [viewMode, setViewMode] = useState<'list' | 'map'>('list');
-  const [syncStatuses, setSyncStatuses] = useState<Record<string, any>>({});
   const [newPlace, setNewPlace] = useState({
     name: '',
     city: '',
@@ -30,42 +22,14 @@ export function PlacesScreen() {
 
   // Services
   const googlePlacesService = new GooglePlacesService(new LocationService());
-  const mapConfig = new MapSyncConfig();
-  const syncStatusService = new SyncStatusService();
-  const myMapsImportService = new MyMapsImportService();
-  const netlifyApiService = new NetlifyApiService(getNetlifyBaseUrl());
-  const enhancedSyncService = new EnhancedSyncService(
-    mapConfig,
-    syncStatusService,
-    myMapsImportService,
-    netlifyApiService
-  );
 
   useEffect(() => {
     loadPlaces();
-    loadSyncStatuses();
   }, []);
 
   useEffect(() => {
     filterPlaces();
   }, [places, selectedCategory, searchText]);
-
-  const loadSyncStatuses = async () => {
-    const configs = mapConfig.getMapConfigs();
-    const statuses: Record<string, any> = {};
-    
-    for (const config of configs) {
-      statuses[config.id] = syncStatusService.getSyncStatus(config.id);
-      
-      // Load last sync time from storage
-      const lastSyncTime = await syncStatusService.getLastSyncTime(config.id);
-      if (lastSyncTime) {
-        statuses[config.id].lastSyncAt = lastSyncTime;
-      }
-    }
-    
-    setSyncStatuses(statuses);
-  };
 
   const loadPlaces = async () => {
     try {
@@ -121,151 +85,6 @@ export function PlacesScreen() {
       loadPlaces(); // Reload places
     } else {
       Alert.alert('Error', 'Place already exists');
-    }
-  };
-
-  const testNetworkConnectivity = async (): Promise<{ success: boolean; error?: string }> => {
-    try {
-      // Test basic connectivity to Netlify functions endpoint
-      const baseUrl = getNetlifyBaseUrl();
-      const testUrl = `${baseUrl}/.netlify/functions/fetch-mymaps-kml`;
-      
-      // Debug logging
-      console.log('🐛 DEBUG - Environment detection:', {
-        environment: getEnvironment(),
-        baseUrl,
-        testUrl,
-        isDev: isDevelopment(),
-        hostname: typeof window !== 'undefined' ? window.location.hostname : 'N/A',
-        __DEV__: typeof __DEV__ !== 'undefined' ? __DEV__ : 'N/A',
-        NODE_ENV: typeof process !== 'undefined' ? process.env.NODE_ENV : 'N/A'
-      });
-      
-      const response = await fetch(testUrl, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ mapId: 'test' }),
-        // Short timeout for connectivity test
-        signal: AbortSignal.timeout(10000)
-      });
-
-      // Debug logging for response
-      console.log('🐛 DEBUG - Response details:', {
-        status: response.status,
-        statusText: response.statusText,
-        headers: Object.fromEntries(response.headers.entries()),
-        url: response.url
-      });
-
-      // Function exists if we get any of these responses:
-      // - 200: Success (valid map data returned)
-      // - 400: Bad request (function processed request but invalid data)  
-      // - 404: Not found (function working but map doesn't exist - this is expected with test mapId)
-      // - 405: Method not allowed (function exists but wrong HTTP method)
-      if (response.status === 200 || response.status === 400 || response.status === 404 || response.status === 405) {
-        console.log('🐛 DEBUG - Connectivity test PASSED with status:', response.status);
-        return { success: true };
-      }
-      
-      console.log('🐛 DEBUG - Connectivity test FAILED with status:', response.status);
-      return { 
-        success: false, 
-        error: `Server responded with status ${response.status}. This indicates functions may not be deployed or are returning unexpected errors.` 
-      };
-    } catch (error) {
-      console.log('🐛 DEBUG - Connectivity test ERROR:', error);
-      if (error instanceof Error) {
-        if (error.name === 'TimeoutError') {
-          return { success: false, error: 'Connection timeout. Check your internet connection.' };
-        }
-        if (error.message.includes('fetch')) {
-          const env = getEnvironment();
-          return { 
-            success: false, 
-            error: `Cannot reach ${getNetlifyBaseUrl()}. ${env === 'development' ? 'Is netlify dev running?' : 'Are functions deployed?'}` 
-          };
-        }
-        return { success: false, error: error.message };
-      }
-      return { success: false, error: 'Network connectivity test failed' };
-    }
-  };
-
-  const handleSyncMap = async (mapId: string) => {
-    const mapName = mapConfig.getDisplayName(mapId);
-    
-    try {
-      // Step 1: Test network connectivity first
-      setSyncStatuses(prev => ({
-        ...prev,
-        [mapId]: {
-          ...prev[mapId],
-          status: 'connecting',
-          message: 'Testing network connectivity...'
-        }
-      }));
-
-      const connectivityTest = await testNetworkConnectivity();
-      if (!connectivityTest.success) {
-        throw new Error(connectivityTest.error);
-      }
-
-      // Step 2: Proceed with sync
-      const result = await enhancedSyncService.syncMap(mapId, (progress) => {
-        // Update status in real-time during sync
-        setSyncStatuses(prev => ({
-          ...prev,
-          [mapId]: {
-            ...prev[mapId],
-            status: progress.phase,
-            message: progress.message
-          }
-        }));
-      });
-
-      // Step 3: Process the result
-      if (result.success && result.placesAdded > 0) {
-        // Here you would integrate with your place storage
-        // For now, we'll simulate adding places
-        loadPlaces(); // Reload places
-      }
-
-      // Step 4: Update final status
-      setSyncStatuses(prev => ({
-        ...prev,
-        [mapId]: syncStatusService.getSyncStatus(mapId)
-      }));
-
-      // Step 5: Show result message
-      if (result.success) {
-        const message = result.placesFound === 0 
-          ? `No places found in ${result.mapName}`
-          : `Sync completed!\n${result.placesAdded} new places added${result.duplicatesSkipped > 0 ? `\n${result.duplicatesSkipped} duplicates skipped` : ''}`;
-        Alert.alert('Sync Success', message);
-      } else {
-        Alert.alert('Sync Failed', result.error || 'Unknown error occurred');
-      }
-
-    } catch (error) {
-      const errorMessage = error instanceof Error ? error.message : 'Unknown error occurred';
-      
-      // Provide more specific error messages
-      let userFriendlyMessage = errorMessage;
-      if (errorMessage.includes('fetch')) {
-        userFriendlyMessage += `\n\nTroubleshooting:\n• Check internet connection\n• Environment: ${getEnvironment()}\n• URL: ${getNetlifyBaseUrl()}`;
-      }
-      
-      Alert.alert('Sync Error', userFriendlyMessage);
-      
-      // Update status to show error
-      setSyncStatuses(prev => ({
-        ...prev,
-        [mapId]: {
-          ...prev[mapId],
-          status: 'error',
-          message: errorMessage
-        }
-      }));
     }
   };
 
@@ -396,45 +215,6 @@ export function PlacesScreen() {
           </View>
         </View>
       )}
-
-      {/* Maps Sync Section */}
-      <View style={styles.syncSection}>
-        <Text style={styles.syncSectionTitle}>My Maps Sync</Text>
-        
-        {/* Paul's Map */}
-        <View style={styles.mapSyncContainer}>
-          <View style={styles.mapSyncHeader}>
-            <TouchableOpacity
-              testID="sync-pauls-map-button"
-              style={[styles.syncButton, styles.paulsMapButton]}
-              onPress={() => handleSyncMap('pauls-map')}
-              disabled={syncStatuses['pauls-map']?.status === 'connecting' || syncStatuses['pauls-map']?.status === 'syncing'}
-            >
-              <Text style={styles.syncButtonText}>👨‍💼 Sync Paul's Map</Text>
-            </TouchableOpacity>
-          </View>
-          {syncStatuses['pauls-map'] && (
-            <SyncStatus status={syncStatuses['pauls-map']} compact />
-          )}
-        </View>
-
-        {/* Michelle's Map */}
-        <View style={styles.mapSyncContainer}>
-          <View style={styles.mapSyncHeader}>
-            <TouchableOpacity
-              testID="sync-michelles-map-button"
-              style={[styles.syncButton, styles.michellesMapButton]}
-              onPress={() => handleSyncMap('michelles-map')}
-              disabled={syncStatuses['michelles-map']?.status === 'connecting' || syncStatuses['michelles-map']?.status === 'syncing'}
-            >
-              <Text style={styles.syncButtonText}>👩‍💼 Sync Michelle's Map</Text>
-            </TouchableOpacity>
-          </View>
-          {syncStatuses['michelles-map'] && (
-            <SyncStatus status={syncStatuses['michelles-map']} compact />
-          )}
-        </View>
-      </View>
 
       {/* Action Buttons */}
       <View style={styles.actionButtonsContainer}>
@@ -810,50 +590,6 @@ const styles = StyleSheet.create({
   },
   cancelButtonText: {
     color: '#333',
-    fontSize: 16,
-    fontWeight: '600',
-  },
-  // Sync section styles
-  syncSection: {
-    padding: 16,
-    backgroundColor: '#f8f9fa',
-    marginHorizontal: 16,
-    marginVertical: 8,
-    borderRadius: 12,
-    borderWidth: 1,
-    borderColor: '#e9ecef',
-  },
-  syncSectionTitle: {
-    fontSize: 18,
-    fontWeight: 'bold',
-    marginBottom: 12,
-    textAlign: 'center',
-    color: '#333',
-  },
-  mapSyncContainer: {
-    marginBottom: 12,
-  },
-  mapSyncHeader: {
-    marginBottom: 8,
-  },
-  syncButton: {
-    padding: 14,
-    borderRadius: 10,
-    alignItems: 'center',
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.1,
-    shadowRadius: 3,
-    elevation: 3,
-  },
-  paulsMapButton: {
-    backgroundColor: '#007AFF',
-  },
-  michellesMapButton: {
-    backgroundColor: '#FF6B6B',
-  },
-  syncButtonText: {
-    color: '#fff',
     fontSize: 16,
     fontWeight: '600',
   },

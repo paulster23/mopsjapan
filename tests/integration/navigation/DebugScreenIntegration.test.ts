@@ -74,7 +74,7 @@ describe('DebugScreen Integration', () => {
         expect(module.DebugScreen).toBeDefined();
       } catch (error: any) {
         // If import fails due to React Native dependencies, check for RN error
-        expect(error.message).toMatch(/Cannot read properties|Cannot find module/);
+        expect(error.message).toMatch(/Cannot read properties|Cannot find module|__DEV__ is not defined/);
       }
     });
 
@@ -84,7 +84,7 @@ describe('DebugScreen Integration', () => {
         expect(module.DebugScreen).toBeDefined();
       } catch (error: any) {
         // If import fails due to React Native dependencies, check for RN error  
-        expect(error.message).toMatch(/Cannot read properties|Cannot find module/);
+        expect(error.message).toMatch(/Cannot read properties|Cannot find module|__DEV__ is not defined/);
       }
     });
   });

@@ -4,6 +4,13 @@ import { exec } from 'child_process';
 import { StorageMonitorService } from '../services/StorageMonitorService';
 import { LocationOverrideService } from '../services/LocationOverrideService';
 import { DataPersistenceService } from '../services/DataPersistenceService';
+import { SyncStatus } from '../components/SyncStatus';
+import { MapSyncConfig } from '../services/MapSyncConfig';
+import { SyncStatusService } from '../services/SyncStatusService';
+import { EnhancedSyncService } from '../services/EnhancedSyncService';
+import { MyMapsImportService } from '../services/MyMapsImportService';
+import { NetlifyApiService } from '../services/NetlifyApiService';
+import { getNetlifyBaseUrl, getEnvironment, isDevelopment } from '../config/environment';
 
 interface TestSuiteStats {
   totalTests: number;
@@ -56,6 +63,9 @@ export function DebugScreen() {
   const [currentOverrideLocation, setCurrentOverrideLocation] = useState<string | null>(null);
   const [availableLocations, setAvailableLocations] = useState<Array<{latitude: number, longitude: number, name: string}>>([]);
   
+  // Maps Sync State
+  const [syncStatuses, setSyncStatuses] = useState<Record<string, any>>({});
+  
   const storageMonitor = new StorageMonitorService();
   const mockStorageAdapter = {
     getItem: async (key: string) => null,
@@ -65,6 +75,18 @@ export function DebugScreen() {
   };
   const dataService = new DataPersistenceService(mockStorageAdapter);
   const locationOverrideService = new LocationOverrideService(dataService);
+  
+  // Maps Sync Services
+  const mapConfig = new MapSyncConfig();
+  const syncStatusService = new SyncStatusService();
+  const myMapsImportService = new MyMapsImportService();
+  const netlifyApiService = new NetlifyApiService(getNetlifyBaseUrl());
+  const enhancedSyncService = new EnhancedSyncService(
+    mapConfig,
+    syncStatusService,
+    myMapsImportService,
+    netlifyApiService
+  );
 
   useEffect(() => {
     loadDebugInfo();
@@ -77,7 +99,8 @@ export function DebugScreen() {
         loadTestSuiteHealth(),
         loadServiceHealth(),
         loadStorageQuota(),
-        loadLocationOverrideStatus()
+        loadLocationOverrideStatus(),
+        loadSyncStatuses()
       ]);
       setLastRefresh(new Date());
     } catch (error) {
@@ -279,6 +302,151 @@ export function DebugScreen() {
         }
       ]
     );
+  };
+
+  // Maps Sync Functions
+  const loadSyncStatuses = async () => {
+    const configs = mapConfig.getMapConfigs();
+    const statuses: Record<string, any> = {};
+    
+    for (const config of configs) {
+      statuses[config.id] = syncStatusService.getSyncStatus(config.id);
+      
+      // Load last sync time from storage
+      const lastSyncTime = await syncStatusService.getLastSyncTime(config.id);
+      if (lastSyncTime) {
+        statuses[config.id].lastSyncAt = lastSyncTime;
+      }
+    }
+    
+    setSyncStatuses(statuses);
+  };
+
+  const testNetworkConnectivity = async (): Promise<{ success: boolean; error?: string }> => {
+    try {
+      // Test basic connectivity to Netlify functions endpoint
+      const baseUrl = getNetlifyBaseUrl();
+      const testUrl = `${baseUrl}/.netlify/functions/fetch-mymaps-kml`;
+      
+      console.log('🐛 DEBUG - Environment detection:', {
+        environment: getEnvironment(),
+        baseUrl,
+        testUrl,
+        isDev: isDevelopment(),
+        hostname: typeof window !== 'undefined' ? window.location.hostname : 'N/A'
+      });
+      
+      const response = await fetch(testUrl, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({ mapId: 'test' }),
+        signal: AbortSignal.timeout(10000)
+      });
+
+      console.log('🐛 DEBUG - Connectivity test response:', {
+        status: response.status,
+        statusText: response.statusText,
+        headers: Object.fromEntries(response.headers.entries())
+      });
+
+      if (response.status === 200 || response.status === 400 || response.status === 404 || response.status === 405) {
+        console.log('🐛 DEBUG - Connectivity test SUCCESS');
+        return { success: true };
+      }
+      
+      console.log('🐛 DEBUG - Connectivity test FAILED with status:', response.status);
+      return { 
+        success: false, 
+        error: `Server responded with status ${response.status}. This indicates functions may not be deployed or are returning unexpected errors.` 
+      };
+    } catch (error) {
+      console.log('🐛 DEBUG - Connectivity test ERROR:', error);
+      
+      if (error instanceof Error) {
+        if (error.name === 'TimeoutError') {
+          return { success: false, error: 'Connection timeout - server may be unavailable' };
+        }
+        if (error.message.includes('Failed to fetch')) {
+          return { success: false, error: 'Network error - check internet connection and server availability' };
+        }
+        return { success: false, error: `Network error: ${error.message}` };
+      }
+      return { success: false, error: 'Network connectivity test failed' };
+    }
+  };
+
+  const handleSyncMap = async (mapId: string) => {
+    const mapName = mapConfig.getDisplayName(mapId);
+    
+    try {
+      // Step 1: Test network connectivity first
+      setSyncStatuses(prev => ({
+        ...prev,
+        [mapId]: {
+          ...prev[mapId],
+          status: 'connecting',
+          message: 'Testing network connectivity...'
+        }
+      }));
+
+      const connectivityTest = await testNetworkConnectivity();
+      if (!connectivityTest.success) {
+        throw new Error(connectivityTest.error);
+      }
+
+      // Step 2: Proceed with sync
+      const result = await enhancedSyncService.syncMap(mapId, (progress) => {
+        // Update status in real-time during sync
+        setSyncStatuses(prev => ({
+          ...prev,
+          [mapId]: {
+            ...prev[mapId],
+            status: progress.phase,
+            message: progress.message
+          }
+        }));
+      });
+
+      // Step 3: Process the result
+      if (result.success && result.placesAdded > 0) {
+        // Here you would integrate with your place storage
+        // For now, we'll simulate adding places
+        // loadPlaces(); // Would reload places if this were in PlacesScreen
+      }
+
+      // Step 4: Update final status
+      setSyncStatuses(prev => ({
+        ...prev,
+        [mapId]: syncStatusService.getSyncStatus(mapId)
+      }));
+
+      // Step 5: Show result message
+      if (result.success) {
+        const message = result.placesFound === 0 
+          ? `${mapName} sync completed but no places were found`
+          : `${mapName} sync completed! Found ${result.placesFound} places, added ${result.placesAdded} new places, skipped ${result.duplicatesSkipped} duplicates`;
+        Alert.alert('Sync Complete', message);
+      } else {
+        Alert.alert('Sync Failed', `Failed to sync ${mapName}: ${result.error}`);
+      }
+
+    } catch (error) {
+      console.error(`Error syncing ${mapName}:`, error);
+      
+      // Update status to show error
+      setSyncStatuses(prev => ({
+        ...prev,
+        [mapId]: {
+          ...prev[mapId],
+          status: 'error',
+          message: error instanceof Error ? error.message : 'Sync failed'
+        }
+      }));
+      
+      Alert.alert('Sync Error', `Failed to sync ${mapName}: ${error instanceof Error ? error.message : 'Unknown error'}`);
+    }
   };
 
   const testPassRate = testStats.totalTests > 0 
@@ -547,6 +715,48 @@ export function DebugScreen() {
             {require('react-native').Platform.constants?.reactNativeVersion?.minor}.
             {require('react-native').Platform.constants?.reactNativeVersion?.patch}
           </Text>
+        </View>
+      </View>
+
+      {/* Maps Sync Section */}
+      <View style={styles.section}>
+        <Text style={styles.sectionTitle}>🗺️ My Maps Sync</Text>
+        <Text style={styles.sectionDescription}>
+          Sync places from Google My Maps for testing and development
+        </Text>
+        
+        {/* Paul's Map */}
+        <View style={styles.mapSyncContainer}>
+          <View style={styles.mapSyncHeader}>
+            <TouchableOpacity
+              testID="sync-pauls-map-button"
+              style={[styles.syncButton, styles.paulsMapButton]}
+              onPress={() => handleSyncMap('pauls-map')}
+              disabled={syncStatuses['pauls-map']?.status === 'connecting' || syncStatuses['pauls-map']?.status === 'syncing'}
+            >
+              <Text style={styles.syncButtonText}>👨‍💼 Sync Paul's Map</Text>
+            </TouchableOpacity>
+          </View>
+          {syncStatuses['pauls-map'] && (
+            <SyncStatus status={syncStatuses['pauls-map']} compact />
+          )}
+        </View>
+
+        {/* Michelle's Map */}
+        <View style={styles.mapSyncContainer}>
+          <View style={styles.mapSyncHeader}>
+            <TouchableOpacity
+              testID="sync-michelles-map-button"
+              style={[styles.syncButton, styles.michellesMapButton]}
+              onPress={() => handleSyncMap('michelles-map')}
+              disabled={syncStatuses['michelles-map']?.status === 'connecting' || syncStatuses['michelles-map']?.status === 'syncing'}
+            >
+              <Text style={styles.syncButtonText}>👩‍💼 Sync Michelle's Map</Text>
+            </TouchableOpacity>
+          </View>
+          {syncStatuses['michelles-map'] && (
+            <SyncStatus status={syncStatuses['michelles-map']} compact />
+          )}
         </View>
       </View>
     </ScrollView>
@@ -916,6 +1126,35 @@ const styles = StyleSheet.create({
   quickButtonText: {
     color: '#fff',
     fontSize: 14,
+    fontWeight: '600',
+  },
+
+  // Maps Sync Styles
+  mapSyncContainer: {
+    marginBottom: 12,
+  },
+  mapSyncHeader: {
+    marginBottom: 8,
+  },
+  syncButton: {
+    padding: 14,
+    borderRadius: 10,
+    alignItems: 'center',
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.1,
+    shadowRadius: 4,
+    elevation: 2,
+  },
+  paulsMapButton: {
+    backgroundColor: '#4ECDC4',
+  },
+  michellesMapButton: {
+    backgroundColor: '#FF6B6B',
+  },
+  syncButtonText: {
+    color: '#fff',
+    fontSize: 16,
     fontWeight: '600',
   },
 });
