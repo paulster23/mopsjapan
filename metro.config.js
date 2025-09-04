@@ -22,10 +22,20 @@ config.resolver.resolveRequest = (context, moduleName, platform) => {
     if (moduleName.includes('HMRClient') || 
         moduleName.includes('DeviceInfo') ||
         moduleName.includes('Inspector') ||
-        moduleName.includes('NativeAnimated') ||
         moduleName.includes('TurboModule')) {
       return {
         filePath: path.join(__dirname, 'dev-tools-shim.js'),
+        type: 'sourceFile',
+      };
+    }
+    
+    // Handle NativeAnimatedHelper import issues separately
+    if (moduleName.includes('NativeAnimated') ||
+        moduleName === '../NativeAnimatedHelper' ||
+        moduleName === './NativeAnimatedHelper' ||
+        moduleName.endsWith('NativeAnimatedHelper')) {
+      return {
+        filePath: path.join(__dirname, 'native-animated-shim.js'),
         type: 'sourceFile',
       };
     }
