@@ -8,7 +8,7 @@ import { SyncStatusService } from '../services/SyncStatusService';
 import { EnhancedSyncService } from '../services/EnhancedSyncService';
 import { MyMapsImportService } from '../services/MyMapsImportService';
 import { NetlifyApiService } from '../services/NetlifyApiService';
-import { getNetlifyBaseUrl, getEnvironment } from '../config/environment';
+import { getNetlifyBaseUrl, getEnvironment, isDevelopment } from '../config/environment';
 
 export function PlacesScreen() {
   const [places, setPlaces] = useState<Place[]>([]);
