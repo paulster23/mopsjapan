@@ -6,6 +6,28 @@ const config = getDefaultConfig(__dirname);
 // Custom resolver to handle problematic imports
 const originalResolver = config.resolver.resolveRequest;
 config.resolver.resolveRequest = (context, moduleName, platform) => {
+  // Skip development-only modules in production builds or when platform is web
+  if (platform === 'web') {
+    // Skip React DevTools modules
+    if (moduleName.includes('DevToolsSettings') || 
+        moduleName.includes('setUpReactDevTools') ||
+        moduleName.includes('DevToolsSettingsManager')) {
+      return {
+        filePath: path.join(__dirname, 'dev-tools-shim.js'),
+        type: 'sourceFile',
+      };
+    }
+    
+    // Skip other development-only modules
+    if (moduleName.includes('HMRClient') || 
+        moduleName.includes('DeviceInfo') ||
+        moduleName.includes('Inspector')) {
+      return {
+        filePath: path.join(__dirname, 'dev-tools-shim.js'),
+        type: 'sourceFile',
+      };
+    }
+  }
   // Handle the problematic Platform import (various relative paths)
   if (moduleName === '../Utilities/Platform' || 
       moduleName === '../../Utilities/Platform' ||
