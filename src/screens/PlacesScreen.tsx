@@ -33,7 +33,7 @@ export function PlacesScreen() {
 
   const loadPlaces = async () => {
     try {
-      const loadedPlaces = googlePlacesService.loadCustomMapPlaces();
+      const loadedPlaces = googlePlacesService.getAllPlaces();
       setPlaces(loadedPlaces);
     } finally {
       setLoading(false);

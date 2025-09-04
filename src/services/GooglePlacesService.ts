@@ -343,7 +343,7 @@ export class GooglePlacesService {
     };
   }
 
-  private getAllPlaces(): Place[] {
+  getAllPlaces(): Place[] {
     if (this.customPlaces.length === 0) {
       this.loadCustomMapPlaces();
     }
