@@ -2,7 +2,7 @@ import { MapSyncConfig, MapConfig } from './MapSyncConfig';
 import { SyncStatusService, SyncResult } from './SyncStatusService';
 import { MyMapsImportService } from './MyMapsImportService';
 import { NetlifyApiService } from './NetlifyApiService';
-import { Place } from './GooglePlacesService';
+import { GooglePlacesService, Place } from './GooglePlacesService';
 
 export interface SyncProgress {
   phase: 'connecting' | 'fetching' | 'parsing' | 'processing' | 'completing';
@@ -25,6 +25,12 @@ export interface SyncMapResult {
   duplicatesSkipped: number;
   syncedAt: string;
   error?: string;
+  verification?: {
+    beforeCount: number;
+    afterCount: number;
+    actualAdded: number;
+    countsMatch: boolean;
+  };
 }
 
 export class EnhancedSyncService {
@@ -32,7 +38,8 @@ export class EnhancedSyncService {
     private mapConfig: MapSyncConfig,
     private syncStatus: SyncStatusService,
     private importService: MyMapsImportService,
-    private apiService: NetlifyApiService
+    private apiService: NetlifyApiService,
+    private googlePlacesService: GooglePlacesService
   ) {}
 
   async testConnection(mapId: string): Promise<ConnectionTestResult> {
@@ -132,10 +139,30 @@ export class EnhancedSyncService {
       onProgress?.({ phase: 'processing', message: `Found ${places.length} places, checking for duplicates...` });
       this.syncStatus.updateSyncStatus(mapId, 'syncing', `Found ${places.length} places, checking for duplicates...`);
 
-      // Here you would integrate with your existing place storage/duplicate detection logic
-      // For now, we'll simulate the process
-      const placesAdded = places.length; // This would be the actual count of new places added
-      const duplicatesSkipped = 0; // This would be the actual count of duplicates found
+      // Get count before adding places for verification
+      const beforeCount = this.googlePlacesService.getPlaceStatistics().total;
+
+      // Actually integrate places with duplicate detection
+      let placesAdded = 0;
+      let duplicatesSkipped = 0;
+
+      for (const place of places) {
+        const added = this.googlePlacesService.addCustomPlace(place);
+        if (added) {
+          placesAdded++;
+        } else {
+          duplicatesSkipped++;
+        }
+      }
+
+      // Get count after adding places for verification
+      const afterCount = this.googlePlacesService.getPlaceStatistics().total;
+      const actualAdded = afterCount - beforeCount;
+      const countsMatch = actualAdded === placesAdded;
+
+      if (!countsMatch) {
+        console.warn(`Sync count mismatch: reported ${placesAdded}, actual ${actualAdded}`);
+      }
 
       // Phase 5: Completing
       onProgress?.({ phase: 'completing', message: 'Sync completed successfully' });
@@ -158,7 +185,13 @@ export class EnhancedSyncService {
         placesFound: places.length,
         placesAdded,
         duplicatesSkipped,
-        syncedAt
+        syncedAt,
+        verification: {
+          beforeCount,
+          afterCount,
+          actualAdded,
+          countsMatch
+        }
       };
 
     } catch (error) {

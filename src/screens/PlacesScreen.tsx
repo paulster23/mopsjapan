@@ -1,7 +1,7 @@
 import React, { useEffect, useState } from 'react';
 import { View, Text, StyleSheet, TouchableOpacity, FlatList, TextInput, Modal, Alert } from 'react-native';
-import { GooglePlacesService, Place, PlaceCategory } from '../services/GooglePlacesService';
-import { LocationService } from '../services/LocationService';
+import { Place, PlaceCategory } from '../services/GooglePlacesService';
+import { sharedGooglePlacesService } from '../services/SharedServices';
 
 export function PlacesScreen() {
   const [places, setPlaces] = useState<Place[]>([]);
@@ -21,7 +21,7 @@ export function PlacesScreen() {
   });
 
   // Services
-  const googlePlacesService = new GooglePlacesService(new LocationService());
+  const googlePlacesService = sharedGooglePlacesService;
 
   useEffect(() => {
     loadPlaces();

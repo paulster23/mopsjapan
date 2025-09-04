@@ -10,6 +10,7 @@ import { SyncStatusService } from '../services/SyncStatusService';
 import { EnhancedSyncService } from '../services/EnhancedSyncService';
 import { MyMapsImportService } from '../services/MyMapsImportService';
 import { NetlifyApiService } from '../services/NetlifyApiService';
+import { sharedGooglePlacesService } from '../services/SharedServices';
 import { getNetlifyBaseUrl, getEnvironment, isDevelopment } from '../config/environment';
 
 interface TestSuiteStats {
@@ -81,11 +82,13 @@ export function DebugScreen() {
   const syncStatusService = new SyncStatusService();
   const myMapsImportService = new MyMapsImportService();
   const netlifyApiService = new NetlifyApiService(getNetlifyBaseUrl());
+  const googlePlacesService = sharedGooglePlacesService;
   const enhancedSyncService = new EnhancedSyncService(
     mapConfig,
     syncStatusService,
     myMapsImportService,
-    netlifyApiService
+    netlifyApiService,
+    googlePlacesService
   );
 
   useEffect(() => {
@@ -409,12 +412,8 @@ export function DebugScreen() {
         }));
       });
 
-      // Step 3: Process the result
-      if (result.success && result.placesAdded > 0) {
-        // Here you would integrate with your place storage
-        // For now, we'll simulate adding places
-        // loadPlaces(); // Would reload places if this were in PlacesScreen
-      }
+      // Step 3: Process the result - places are now automatically added by EnhancedSyncService
+      // No additional processing needed here since we're using shared service
 
       // Step 4: Update final status
       setSyncStatuses(prev => ({
@@ -424,10 +423,15 @@ export function DebugScreen() {
 
       // Step 5: Show result message
       if (result.success) {
-        const message = result.placesFound === 0 
+        const baseMessage = result.placesFound === 0 
           ? `${mapName} sync completed but no places were found`
           : `${mapName} sync completed! Found ${result.placesFound} places, added ${result.placesAdded} new places, skipped ${result.duplicatesSkipped} duplicates`;
-        Alert.alert('Sync Complete', message);
+        
+        const verificationMessage = result.verification 
+          ? `\n\nVerification: ${result.verification.countsMatch ? '✅' : '⚠️'} Count verification ${result.verification.countsMatch ? 'passed' : 'failed'}\nBefore: ${result.verification.beforeCount} → After: ${result.verification.afterCount} (${result.verification.actualAdded > 0 ? '+' : ''}${result.verification.actualAdded})` 
+          : '';
+        
+        Alert.alert('Sync Complete', baseMessage + verificationMessage);
       } else {
         Alert.alert('Sync Failed', `Failed to sync ${mapName}: ${result.error}`);
       }
