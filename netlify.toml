@@ -18,12 +18,12 @@
   functionsPort = 8888
 
 [[redirects]]
-  # SPA routing - redirect all routes to index.html
+  # SPA routing - redirect all routes to index.html except functions
   from = "/*"
   to = "/index.html"
   status = 200
-  # Don't apply this redirect to API calls and assets
-  conditions = {Role = ["visitor"], Country = ["!"], X-Forwarded-Proto = ["!http"]}
+  # Don't apply this redirect to function calls, API calls and assets
+  conditions = {Path = ["!/.netlify/functions/*"], Role = ["visitor"], Country = ["!"], X-Forwarded-Proto = ["!http"]}
 
 [[headers]]
   # CORS headers for functions
