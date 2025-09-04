@@ -1,8 +1,10 @@
 import { GooglePlacesService } from '../../../src/services/GooglePlacesService';
 import { LocationService } from '../../../src/services/LocationService';
+import AsyncStorage from '@react-native-async-storage/async-storage';
 
 // Mock dependencies
 jest.mock('../../../src/services/LocationService');
+jest.mock('@react-native-async-storage/async-storage');
 
 // Mock fetch for API calls
 global.fetch = jest.fn();
@@ -15,6 +17,10 @@ describe('GooglePlacesService', () => {
     mockLocationService = new LocationService() as jest.Mocked<LocationService>;
     service = new GooglePlacesService(mockLocationService);
     jest.clearAllMocks();
+    
+    // Reset AsyncStorage mock
+    (AsyncStorage.getItem as jest.Mock).mockResolvedValue(null);
+    (AsyncStorage.setItem as jest.Mock).mockResolvedValue(undefined);
   });
 
   describe('loadCustomMapPlaces', () => {
@@ -261,6 +267,120 @@ describe('GooglePlacesService', () => {
       expect(stats.byCity.Osaka).toBeGreaterThan(0);
       expect(stats.byCity.Nara).toBeGreaterThan(0);
       expect(stats.byCity.Nagoya).toBeGreaterThan(0);
+    });
+  });
+
+  describe('Persistent Storage for Synced Places', () => {
+    const mockSyncedPlaces = [
+      {
+        id: 'synced-place-1',
+        name: 'Synced Restaurant',
+        category: 'restaurant' as const,
+        city: 'Tokyo',
+        coordinates: { latitude: 35.6812, longitude: 139.7671 },
+        description: 'A place from sync'
+      },
+      {
+        id: 'synced-place-2', 
+        name: 'Synced Hotel',
+        category: 'accommodation' as const,
+        city: 'Osaka'
+      }
+    ];
+
+    it('should save synced places to AsyncStorage when adding places', async () => {
+      // Add some synced places
+      const added1 = service.addCustomPlace(mockSyncedPlaces[0]);
+      const added2 = service.addCustomPlace(mockSyncedPlaces[1]);
+      
+      expect(added1).toBe(true);
+      expect(added2).toBe(true);
+      
+      // Verify AsyncStorage was called to save synced places  
+      // Check the last call to make sure it has both places
+      const lastCall = (AsyncStorage.setItem as jest.Mock).mock.calls[1];
+      expect(lastCall[0]).toBe('syncedPlaces');
+      const savedPlaces = JSON.parse(lastCall[1]);
+      expect(savedPlaces).toHaveLength(2);
+      expect(savedPlaces[0].name).toBe('Synced Restaurant');
+      expect(savedPlaces[1].name).toBe('Synced Hotel');
+    });
+
+    it('should load synced places from AsyncStorage on initialization', async () => {
+      // Mock AsyncStorage to return synced places
+      (AsyncStorage.getItem as jest.Mock).mockResolvedValue(JSON.stringify(mockSyncedPlaces));
+      
+      // Create a new service instance to trigger loading
+      const newService = new GooglePlacesService(mockLocationService);
+      
+      // Wait for async loading to complete
+      await new Promise(resolve => setTimeout(resolve, 0));
+      
+      const allPlaces = newService.getAllPlaces();
+      
+      // Should have static places + synced places
+      expect(allPlaces.length).toBe(24 + 2); // 24 static + 2 synced
+      
+      // Verify synced places are present
+      expect(allPlaces.find(p => p.name === 'Synced Restaurant')).toBeDefined();
+      expect(allPlaces.find(p => p.name === 'Synced Hotel')).toBeDefined();
+    });
+
+    it('should merge static and synced places without duplicates', async () => {
+      // Mock AsyncStorage to return a place that conflicts with static data
+      const conflictingPlace = {
+        id: 'conflicting-place',
+        name: 'Tokyo Station', // This exists in static data
+        category: 'transport' as const,
+        city: 'Tokyo'
+      };
+      
+      (AsyncStorage.getItem as jest.Mock).mockResolvedValue(JSON.stringify([conflictingPlace]));
+      
+      const newService = new GooglePlacesService(mockLocationService);
+      await new Promise(resolve => setTimeout(resolve, 0));
+      
+      const allPlaces = newService.getAllPlaces();
+      
+      // Should not have duplicated Tokyo Station
+      const tokyoStations = allPlaces.filter(p => p.name === 'Tokyo Station');
+      expect(tokyoStations).toHaveLength(1);
+      expect(allPlaces.length).toBe(24); // Same as static places since duplicate was filtered out
+    });
+
+    it('should handle AsyncStorage errors gracefully', async () => {
+      // Mock AsyncStorage to throw an error
+      (AsyncStorage.getItem as jest.Mock).mockRejectedValue(new Error('Storage error'));
+      
+      const newService = new GooglePlacesService(mockLocationService);
+      await new Promise(resolve => setTimeout(resolve, 0));
+      
+      // Should still work with just static places
+      const allPlaces = newService.getAllPlaces();
+      expect(allPlaces.length).toBe(24); // Just static places
+    });
+
+    it('should save synced places atomically on each addition', async () => {
+      // Add first place
+      service.addCustomPlace(mockSyncedPlaces[0]);
+      
+      // Check the first call
+      const firstCall = (AsyncStorage.setItem as jest.Mock).mock.calls[0];
+      expect(firstCall[0]).toBe('syncedPlaces');
+      const firstSavedPlaces = JSON.parse(firstCall[1]);
+      expect(firstSavedPlaces).toHaveLength(1);
+      expect(firstSavedPlaces[0].name).toBe('Synced Restaurant');
+      
+      // Add second place
+      service.addCustomPlace(mockSyncedPlaces[1]);
+      
+      // Check the second call 
+      const secondCall = (AsyncStorage.setItem as jest.Mock).mock.calls[1];
+      expect(secondCall[0]).toBe('syncedPlaces');
+      const secondSavedPlaces = JSON.parse(secondCall[1]);
+      expect(secondSavedPlaces).toHaveLength(2);
+      expect(secondSavedPlaces[0].name).toBe('Synced Restaurant');
+      expect(secondSavedPlaces[1].name).toBe('Synced Hotel');
     });
   });
 });

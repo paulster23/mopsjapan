@@ -1,4 +1,5 @@
 import { LocationService } from './LocationService';
+import AsyncStorage from '@react-native-async-storage/async-storage';
 
 export type PlaceCategory = 'accommodation' | 'restaurant' | 'entertainment' | 'transport' | 'shopping';
 
@@ -33,10 +34,14 @@ export interface PlaceStatistics {
 
 export class GooglePlacesService {
   private locationService: LocationService;
-  private customPlaces: Place[] = [];
+  private staticPlaces: Place[] = [];
+  private syncedPlaces: Place[] = [];
+  private readonly SYNCED_PLACES_KEY = 'syncedPlaces';
 
   constructor(locationService: LocationService) {
     this.locationService = locationService;
+    // Load synced places from storage
+    this.loadSyncedPlaces();
   }
 
   loadCustomMapPlaces(): Place[] {
@@ -225,8 +230,28 @@ export class GooglePlacesService {
       }
     ];
 
-    this.customPlaces = places;
+    this.staticPlaces = places;
     return places;
+  }
+
+  private async loadSyncedPlaces(): Promise<void> {
+    try {
+      const stored = await AsyncStorage.getItem(this.SYNCED_PLACES_KEY);
+      if (stored) {
+        this.syncedPlaces = JSON.parse(stored);
+      }
+    } catch (error) {
+      console.warn('Failed to load synced places from storage:', error);
+      this.syncedPlaces = [];
+    }
+  }
+
+  private async saveSyncedPlaces(): Promise<void> {
+    try {
+      await AsyncStorage.setItem(this.SYNCED_PLACES_KEY, JSON.stringify(this.syncedPlaces));
+    } catch (error) {
+      console.error('Failed to save synced places to storage:', error);
+    }
   }
 
   getPlacesByCategory(category: PlaceCategory): Place[] {
@@ -288,7 +313,7 @@ export class GooglePlacesService {
   }
 
   addCustomPlace(newPlace: Omit<Place, 'id'>): boolean {
-    // Check if place already exists
+    // Check if place already exists in both static and synced places
     const existingPlace = this.getPlaceDetails(newPlace.name);
     if (existingPlace) {
       return false;
@@ -299,7 +324,13 @@ export class GooglePlacesService {
       id: this.generatePlaceId(newPlace.name)
     };
 
-    this.customPlaces.push(place);
+    this.syncedPlaces.push(place);
+    
+    // Save to storage asynchronously (but don't wait for it)
+    this.saveSyncedPlaces().catch(error => {
+      console.error('Failed to save synced places after adding:', error);
+    });
+    
     return true;
   }
 
@@ -344,10 +375,23 @@ export class GooglePlacesService {
   }
 
   getAllPlaces(): Place[] {
-    if (this.customPlaces.length === 0) {
+    // Load static places if not already loaded
+    if (this.staticPlaces.length === 0) {
       this.loadCustomMapPlaces();
     }
-    return this.customPlaces;
+    
+    // Merge static and synced places, avoiding duplicates
+    const allPlaces = [...this.staticPlaces];
+    const staticNames = new Set(this.staticPlaces.map(p => p.name));
+    
+    // Add synced places that don't conflict with static ones
+    for (const syncedPlace of this.syncedPlaces) {
+      if (!staticNames.has(syncedPlace.name)) {
+        allPlaces.push(syncedPlace);
+      }
+    }
+    
+    return allPlaces;
   }
 
   private generatePlaceId(name: string): string {
