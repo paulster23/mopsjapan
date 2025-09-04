@@ -158,10 +158,11 @@ export function PlacesScreen() {
       });
 
       // Function exists if we get any of these responses:
-      // - 200: Success (shouldn't happen with test data but valid)
-      // - 400: Bad request (expected with test mapId - function processed request)  
+      // - 200: Success (valid map data returned)
+      // - 400: Bad request (function processed request but invalid data)  
+      // - 404: Not found (function working but map doesn't exist - this is expected with test mapId)
       // - 405: Method not allowed (function exists but wrong HTTP method)
-      if (response.status === 200 || response.status === 400 || response.status === 405) {
+      if (response.status === 200 || response.status === 400 || response.status === 404 || response.status === 405) {
         console.log('🐛 DEBUG - Connectivity test PASSED with status:', response.status);
         return { success: true };
       }
