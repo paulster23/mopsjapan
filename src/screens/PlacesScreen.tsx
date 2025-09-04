@@ -138,14 +138,17 @@ export function PlacesScreen() {
         signal: AbortSignal.timeout(10000)
       });
 
-      // We expect a 400 (bad request) since we sent a test mapId, but this means the endpoint is reachable
-      if (response.status === 400 || response.status === 200) {
+      // Function exists if we get any of these responses:
+      // - 200: Success (shouldn't happen with test data but valid)
+      // - 400: Bad request (expected with test mapId - function processed request)  
+      // - 405: Method not allowed (function exists but wrong HTTP method)
+      if (response.status === 200 || response.status === 400 || response.status === 405) {
         return { success: true };
       }
       
       return { 
         success: false, 
-        error: `Server responded with status ${response.status}. Functions may not be deployed yet.` 
+        error: `Server responded with status ${response.status}. This indicates functions may not be deployed or are returning unexpected errors.` 
       };
     } catch (error) {
       if (error instanceof Error) {
