@@ -1,5 +1,6 @@
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useState, useCallback } from 'react';
 import { View, Text, StyleSheet, TouchableOpacity, FlatList, TextInput, Modal, Alert } from 'react-native';
+import { useFocusEffect } from '@react-navigation/native';
 import { Place, PlaceCategory } from '../services/GooglePlacesService';
 import { sharedGooglePlacesService } from '../services/SharedServices';
 
@@ -30,6 +31,13 @@ export function PlacesScreen() {
   useEffect(() => {
     filterPlaces();
   }, [places, selectedCategory, searchText]);
+
+  // Reload places when screen comes into focus (e.g., returning from DebugScreen after sync)
+  useFocusEffect(
+    useCallback(() => {
+      loadPlaces();
+    }, [])
+  );
 
   const loadPlaces = async () => {
     try {

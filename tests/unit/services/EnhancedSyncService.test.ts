@@ -128,6 +128,42 @@ describe('EnhancedSyncService', () => {
         }
       ]);
 
+      mockGooglePlacesService.getPlaceStatistics
+        .mockReturnValueOnce({
+          total: 24,
+          byCategory: {
+            accommodation: 4,
+            restaurant: 5,
+            entertainment: 4,
+            transport: 5,
+            shopping: 6
+          },
+          byCity: {
+            'Tokyo': 20,
+            'Nara': 1,
+            'Osaka': 2,
+            'Nikko': 1
+          }
+        })
+        .mockReturnValueOnce({
+          total: 25,
+          byCategory: {
+            accommodation: 4,
+            restaurant: 6,
+            entertainment: 4,
+            transport: 5,
+            shopping: 6
+          },
+          byCity: {
+            'Tokyo': 21,
+            'Nara': 1,
+            'Osaka': 2,
+            'Nikko': 1
+          }
+        });
+
+      mockGooglePlacesService.addCustomPlace.mockReturnValue(true);
+
       const result = await service.syncMap('pauls-map', onProgress);
 
       expect(result.success).toBe(true);
@@ -189,6 +225,23 @@ describe('EnhancedSyncService', () => {
 
       mockImportService.parseKMLToPlaces.mockReturnValue([]);
 
+      mockGooglePlacesService.getPlaceStatistics.mockReturnValue({
+        total: 24,
+        byCategory: {
+          accommodation: 4,
+          restaurant: 5,
+          entertainment: 4,
+          transport: 5,
+          shopping: 6
+        },
+        byCity: {
+          'Tokyo': 20,
+          'Nara': 1,
+          'Osaka': 2,
+          'Nikko': 1
+        }
+      });
+
       const result = await service.syncMap('pauls-map', onProgress);
 
       expect(result.success).toBe(true);
@@ -237,6 +290,25 @@ describe('EnhancedSyncService', () => {
         .mockReturnValueOnce([{ id: 'paul-place', name: 'Paul Place', category: 'restaurant', city: 'Tokyo' } as any])
         .mockReturnValueOnce([{ id: 'michelle-place', name: 'Michelle Place', category: 'restaurant', city: 'Kyoto' } as any]);
 
+      mockGooglePlacesService.getPlaceStatistics.mockReturnValue({
+        total: 24,
+        byCategory: {
+          accommodation: 4,
+          restaurant: 5,
+          entertainment: 4,
+          transport: 5,
+          shopping: 6
+        },
+        byCity: {
+          'Tokyo': 20,
+          'Nara': 1,
+          'Osaka': 2,
+          'Nikko': 1
+        }
+      });
+
+      mockGooglePlacesService.addCustomPlace.mockReturnValue(true);
+
       const results = await service.syncAllMaps();
 
       expect(results).toHaveLength(2);
@@ -267,6 +339,25 @@ describe('EnhancedSyncService', () => {
 
       mockImportService.parseKMLToPlaces
         .mockReturnValueOnce([{ id: 'michelle-place', name: 'Michelle Place', category: 'restaurant', city: 'Kyoto' } as any]);
+
+      mockGooglePlacesService.getPlaceStatistics.mockReturnValue({
+        total: 24,
+        byCategory: {
+          accommodation: 4,
+          restaurant: 5,
+          entertainment: 4,
+          transport: 5,
+          shopping: 6
+        },
+        byCity: {
+          'Tokyo': 20,
+          'Nara': 1,
+          'Osaka': 2,
+          'Nikko': 1
+        }
+      });
+
+      mockGooglePlacesService.addCustomPlace.mockReturnValue(true);
 
       const results = await service.syncAllMaps();
 
