@@ -18,10 +18,12 @@ config.resolver.resolveRequest = (context, moduleName, platform) => {
       };
     }
     
-    // Skip other development-only modules
+    // Skip other development-only modules and native-only modules
     if (moduleName.includes('HMRClient') || 
         moduleName.includes('DeviceInfo') ||
-        moduleName.includes('Inspector')) {
+        moduleName.includes('Inspector') ||
+        moduleName.includes('NativeAnimated') ||
+        moduleName.includes('TurboModule')) {
       return {
         filePath: path.join(__dirname, 'dev-tools-shim.js'),
         type: 'sourceFile',
