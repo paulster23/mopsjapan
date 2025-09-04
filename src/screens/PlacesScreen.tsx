@@ -130,6 +130,17 @@ export function PlacesScreen() {
       const baseUrl = getNetlifyBaseUrl();
       const testUrl = `${baseUrl}/.netlify/functions/fetch-mymaps-kml`;
       
+      // Debug logging
+      console.log('🐛 DEBUG - Environment detection:', {
+        environment: getEnvironment(),
+        baseUrl,
+        testUrl,
+        isDev: isDevelopment(),
+        hostname: typeof window !== 'undefined' ? window.location.hostname : 'N/A',
+        __DEV__: typeof __DEV__ !== 'undefined' ? __DEV__ : 'N/A',
+        NODE_ENV: typeof process !== 'undefined' ? process.env.NODE_ENV : 'N/A'
+      });
+      
       const response = await fetch(testUrl, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -138,19 +149,30 @@ export function PlacesScreen() {
         signal: AbortSignal.timeout(10000)
       });
 
+      // Debug logging for response
+      console.log('🐛 DEBUG - Response details:', {
+        status: response.status,
+        statusText: response.statusText,
+        headers: Object.fromEntries(response.headers.entries()),
+        url: response.url
+      });
+
       // Function exists if we get any of these responses:
       // - 200: Success (shouldn't happen with test data but valid)
       // - 400: Bad request (expected with test mapId - function processed request)  
       // - 405: Method not allowed (function exists but wrong HTTP method)
       if (response.status === 200 || response.status === 400 || response.status === 405) {
+        console.log('🐛 DEBUG - Connectivity test PASSED with status:', response.status);
         return { success: true };
       }
       
+      console.log('🐛 DEBUG - Connectivity test FAILED with status:', response.status);
       return { 
         success: false, 
         error: `Server responded with status ${response.status}. This indicates functions may not be deployed or are returning unexpected errors.` 
       };
     } catch (error) {
+      console.log('🐛 DEBUG - Connectivity test ERROR:', error);
       if (error instanceof Error) {
         if (error.name === 'TimeoutError') {
           return { success: false, error: 'Connection timeout. Check your internet connection.' };
