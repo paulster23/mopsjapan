@@ -1,11 +1,14 @@
 import React, { useEffect, useState } from 'react';
-import { View, Text, StyleSheet, TouchableOpacity, Alert, FlatList } from 'react-native';
+import { View, Text, StyleSheet, TouchableOpacity, Alert, FlatList, Linking, Platform } from 'react-native';
+import { MapView, Marker } from '../components/PlatformMapView';
 import { useTheme } from '../contexts/ThemeContext';
 import { MapScreenService } from './services/MapScreenService';
 import { LocationService } from '../services/LocationService';
 import { TokyoODPTService } from '../services/TokyoODPTService';
 import { RouteCalculationService, RouteOption, Route } from '../services/RouteCalculationService';
 import { StationFinderService } from '../services/StationFinderService';
+import { sharedGooglePlacesService } from '../services/SharedServices';
+import { Place } from '../services/GooglePlacesService';
 
 interface UserLocation {
   latitude: number;
@@ -52,6 +55,15 @@ export function MapScreen() {
   const [offlineMode, setOfflineMode] = useState(false);
   const [hasCachedData, setHasCachedData] = useState(false);
   
+  // Map-related state
+  const [places, setPlaces] = useState<Place[]>([]);
+  const [mapRegion, setMapRegion] = useState({
+    latitude: 35.6812, // Default to Tokyo
+    longitude: 139.7671,
+    latitudeDelta: 0.05,
+    longitudeDelta: 0.05,
+  });
+  
   const locationService = new LocationService();
   const mapService = new MapScreenService(
     locationService, 
@@ -63,7 +75,25 @@ export function MapScreen() {
     // Auto-request location on component mount
     handleGetLocation();
     checkOfflineData();
+    loadPlaces();
   }, []);
+
+  // Update map region when user location changes
+  useEffect(() => {
+    if (userLocation) {
+      setMapRegion({
+        latitude: userLocation.latitude,
+        longitude: userLocation.longitude,
+        latitudeDelta: 0.05,
+        longitudeDelta: 0.05,
+      });
+    }
+  }, [userLocation]);
+
+  const loadPlaces = () => {
+    const allPlaces = sharedGooglePlacesService.getAllPlaces();
+    setPlaces(allPlaces);
+  };
 
   const checkOfflineData = async () => {
     try {
@@ -160,6 +190,38 @@ export function MapScreen() {
     }
   };
 
+  const handleMarkerPress = async (place: Place) => {
+    if (!place.coordinates) {
+      Alert.alert('No Location', 'This place does not have location coordinates');
+      return;
+    }
+
+    const { latitude, longitude } = place.coordinates;
+    
+    // Create Google Maps URL for directions
+    const destination = `${latitude},${longitude}`;
+    const label = encodeURIComponent(place.name);
+    
+    // Try to open in Google Maps app, fallback to web
+    const googleMapsUrl = Platform.OS === 'ios' 
+      ? `comgooglemaps://?daddr=${destination}&directionsmode=transit&zoom=14&views=traffic`
+      : `google.navigation:q=${destination}&mode=transit`;
+    
+    const webFallbackUrl = `https://www.google.com/maps/dir/?api=1&destination=${destination}&travelmode=transit`;
+    
+    try {
+      const canOpen = await Linking.canOpenURL(googleMapsUrl);
+      if (canOpen) {
+        await Linking.openURL(googleMapsUrl);
+      } else {
+        await Linking.openURL(webFallbackUrl);
+      }
+    } catch (error) {
+      console.error('Error opening maps:', error);
+      Alert.alert('Error', 'Could not open maps application');
+    }
+  };
+
   const renderStation = ({ item }: { item: StationWithStatus }) => (
     <View style={themedStyles.stationItem}>
       <View style={themedStyles.stationHeader}>
@@ -205,6 +267,17 @@ export function MapScreen() {
       case 'Delayed': return '#fd7e14';
       case 'Suspended': return '#dc3545';
       default: return '#6c757d';
+    }
+  };
+
+  const getMarkerColorByCategory = (category: string): string => {
+    switch (category) {
+      case 'accommodation': return 'purple';
+      case 'restaurant': return 'orange';
+      case 'entertainment': return 'green';
+      case 'transport': return 'blue';
+      case 'shopping': return 'red';
+      default: return 'red';
     }
   };
 
@@ -324,19 +397,47 @@ export function MapScreen() {
         </View>
       )}
 
-      <View style={themedStyles.mapPlaceholder}>
-        <Text style={themedStyles.mapPlaceholderText}>
-          📍 Interactive Map
-        </Text>
-        <Text style={themedStyles.mapPlaceholderSubtext}>
-          Map view will show your location and nearby stations
-        </Text>
+      <MapView
+        testID="interactive-map-view"
+        style={themedStyles.mapContainer}
+        region={mapRegion}
+        showsUserLocation={true}
+        showsMyLocationButton={true}
+        onRegionChangeComplete={setMapRegion}
+      >
+        {/* Current location marker */}
         {userLocation && (
-          <Text style={themedStyles.coordinatesText}>
-            {mapService.formatLocationForDisplay(userLocation.latitude, userLocation.longitude)}
-          </Text>
+          <Marker
+            testID="current-location-marker"
+            coordinate={{
+              latitude: userLocation.latitude,
+              longitude: userLocation.longitude,
+            }}
+            title="Your Location"
+            description="Current position"
+            pinColor="blue"
+          />
         )}
-      </View>
+
+        {/* Place markers */}
+        <View testID="place-markers">
+          {places
+            .filter(place => place.coordinates) // Only show places with coordinates
+            .map((place) => (
+              <Marker
+                key={place.id}
+                coordinate={{
+                  latitude: place.coordinates!.latitude,
+                  longitude: place.coordinates!.longitude,
+                }}
+                title={place.name}
+                description={`${place.category} in ${place.city}`}
+                onPress={() => handleMarkerPress(place)}
+                pinColor={getMarkerColorByCategory(place.category)}
+              />
+            ))}
+        </View>
+      </MapView>
     </View>
   );
 }
@@ -479,32 +580,11 @@ const createThemedStyles = (colors: any, theme: string) => StyleSheet.create({
     fontStyle: 'italic',
     marginTop: 20,
   },
-  mapPlaceholder: {
-    height: 200,
-    backgroundColor: theme === 'dark' ? '#2d4a3a' : '#e8f4f8',
+  mapContainer: {
+    height: 300,
     borderRadius: 8,
-    justifyContent: 'center',
-    alignItems: 'center',
-    borderWidth: 2,
-    borderColor: colors.primary,
-    borderStyle: 'dashed',
-  },
-  mapPlaceholderText: {
-    fontSize: 18,
-    fontWeight: '600',
-    color: colors.primary,
-    marginBottom: 4,
-  },
-  mapPlaceholderSubtext: {
-    fontSize: 12,
-    color: colors.secondary,
-    textAlign: 'center',
-    marginBottom: 8,
-  },
-  coordinatesText: {
-    fontSize: 12,
-    color: colors.primary,
-    fontFamily: 'monospace',
+    overflow: 'hidden',
+    marginBottom: 16,
   },
   delaysContainer: {
     marginTop: 8,
@@ -747,33 +827,6 @@ const styles = StyleSheet.create({
     color: '#666',
     fontStyle: 'italic',
     marginTop: 20,
-  },
-  mapPlaceholder: {
-    height: 200,
-    backgroundColor: '#e8f4f8',
-    borderRadius: 8,
-    justifyContent: 'center',
-    alignItems: 'center',
-    borderWidth: 2,
-    borderColor: '#007AFF',
-    borderStyle: 'dashed',
-  },
-  mapPlaceholderText: {
-    fontSize: 18,
-    fontWeight: '600',
-    color: '#007AFF',
-    marginBottom: 4,
-  },
-  mapPlaceholderSubtext: {
-    fontSize: 12,
-    color: '#666',
-    textAlign: 'center',
-    marginBottom: 8,
-  },
-  coordinatesText: {
-    fontSize: 12,
-    color: '#007AFF',
-    fontFamily: 'monospace',
   },
   delaysContainer: {
     marginTop: 8,
