@@ -1,0 +1,42 @@
+[build]
+  # Build command for React Native / Expo web build
+  command = "npm run build"
+  # Directory to publish (after build)
+  publish = "dist"
+
+[functions]
+  # Directory where Netlify functions are located
+  directory = "netlify/functions/"
+  
+[dev]
+  # Local development settings for netlify dev
+  command = "npm start"
+  port = 3000
+  # Functions port for local development
+  functionsPort = 8888
+
+[[redirects]]
+  # SPA routing - redirect all routes to index.html
+  from = "/*"
+  to = "/index.html"
+  status = 200
+  # Don't apply this redirect to API calls and assets
+  conditions = {Role = ["visitor"], Country = ["!"], X-Forwarded-Proto = ["!http"]}
+
+[[headers]]
+  # CORS headers for functions
+  for = "/.netlify/functions/*"
+  [headers.values]
+    Access-Control-Allow-Origin = "*"
+    Access-Control-Allow-Headers = "Content-Type, Authorization"
+    Access-Control-Allow-Methods = "GET, POST, PUT, DELETE, OPTIONS"
+
+[context.production]
+  # Production-specific settings
+  [context.production.environment]
+    NODE_ENV = "production"
+    
+[context.deploy-preview]
+  # Deploy preview settings (for pull requests)
+  [context.deploy-preview.environment]
+    NODE_ENV = "development"
