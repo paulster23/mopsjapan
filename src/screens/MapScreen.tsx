@@ -43,7 +43,7 @@ interface DirectionStep {
 }
 
 export function MapScreen() {
-  const { theme, colors, toggleTheme } = useTheme();
+  const { theme, colors } = useTheme();
   const [userLocation, setUserLocation] = useState<UserLocation | null>(null);
   const [nearbyStations, setNearbyStations] = useState<StationWithStatus[]>([]);
   const [loading, setLoading] = useState(false);
@@ -363,14 +363,6 @@ export function MapScreen() {
             )}
           </View>
           <Text style={themedStyles.compactLocationStatus}>{locationStatus}</Text>
-          <TouchableOpacity 
-            style={themedStyles.themeButton}
-            onPress={toggleTheme}
-          >
-            <Text style={themedStyles.themeButtonText}>
-              {theme === 'light' ? '🌙' : '☀️'}
-            </Text>
-          </TouchableOpacity>
         </View>
       </View>
 
@@ -508,7 +500,7 @@ const createThemedStyles = (colors: any, theme: string) => StyleSheet.create({
   container: {
     flex: 1,
     backgroundColor: colors.background,
-    paddingTop: 50,
+    paddingTop: 16,
     paddingHorizontal: 16,
   },
   header: {
@@ -524,19 +516,8 @@ const createThemedStyles = (colors: any, theme: string) => StyleSheet.create({
     flex: 1,
     textAlign: 'center',
   },
-  themeButton: {
-    backgroundColor: colors.surface,
-    paddingHorizontal: 12,
-    paddingVertical: 8,
-    borderRadius: 20,
-    borderWidth: 1,
-    borderColor: colors.border,
-  },
-  themeButtonText: {
-    fontSize: 18,
-  },
   locationSection: {
-    marginBottom: 24,
+    marginBottom: 16,
     padding: 16,
     backgroundColor: colors.surface,
     borderRadius: 8,
@@ -700,8 +681,8 @@ const createThemedStyles = (colors: any, theme: string) => StyleSheet.create({
     paddingHorizontal: 16,
   },
   categoryButton: {
-    paddingHorizontal: 12,
-    paddingVertical: 6,
+    paddingHorizontal: 8,
+    paddingVertical: 4,
     backgroundColor: colors.surface,
     borderRadius: 16,
     marginRight: 8,
@@ -714,7 +695,7 @@ const createThemedStyles = (colors: any, theme: string) => StyleSheet.create({
     borderColor: colors.primary,
   },
   categoryButtonText: {
-    fontSize: 14,
+    fontSize: 12,
     color: colors.text,
     fontWeight: '500',
   },
@@ -850,7 +831,7 @@ const styles = StyleSheet.create({
   container: {
     flex: 1,
     backgroundColor: '#fff',
-    paddingTop: 50,
+    paddingTop: 16,
     paddingHorizontal: 16,
   },
   title: {
@@ -860,7 +841,7 @@ const styles = StyleSheet.create({
     textAlign: 'center',
   },
   locationSection: {
-    marginBottom: 24,
+    marginBottom: 16,
     padding: 16,
     backgroundColor: '#f5f5f5',
     borderRadius: 8,

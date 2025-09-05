@@ -1,5 +1,5 @@
 import React, { useEffect, useState, useCallback } from 'react';
-import { View, Text, StyleSheet, TouchableOpacity, FlatList, TextInput, Modal, Alert } from 'react-native';
+import { View, Text, StyleSheet, TouchableOpacity, FlatList, Modal, Alert, TextInput } from 'react-native';
 import { useFocusEffect } from '@react-navigation/native';
 import { Place, PlaceCategory } from '../services/GooglePlacesService';
 import { sharedGooglePlacesService } from '../services/SharedServices';
@@ -9,18 +9,10 @@ export function PlacesScreen() {
   const [filteredPlaces, setFilteredPlaces] = useState<Place[]>([]);
   const [loading, setLoading] = useState(true);
   const [selectedCategory, setSelectedCategory] = useState<PlaceCategory | 'all'>('all');
-  const [searchText, setSearchText] = useState('');
   const [selectedPlace, setSelectedPlace] = useState<Place | null>(null);
-  const [showAddModal, setShowAddModal] = useState(false);
   const [showEditModal, setShowEditModal] = useState(false);
   const [editingPlace, setEditingPlace] = useState<Place | null>(null);
   const [showStats, setShowStats] = useState(false);
-  const [newPlace, setNewPlace] = useState({
-    name: '',
-    city: '',
-    description: '',
-    category: 'restaurant' as PlaceCategory
-  });
   const [editPlace, setEditPlace] = useState({
     name: '',
     category: 'restaurant' as PlaceCategory,
@@ -36,7 +28,7 @@ export function PlacesScreen() {
 
   useEffect(() => {
     filterPlaces();
-  }, [places, selectedCategory, searchText]);
+  }, [places, selectedCategory]);
 
   // Reload places when screen comes into focus (e.g., returning from DebugScreen after sync)
   useFocusEffect(
@@ -58,11 +50,6 @@ export function PlacesScreen() {
   const filterPlaces = () => {
     let filtered = places;
 
-    // Apply search filter
-    if (searchText.trim()) {
-      filtered = googlePlacesService.searchPlaces(searchText);
-    }
-
     // Apply category filter
     if (selectedCategory !== 'all') {
       filtered = googlePlacesService.getPlacesByCategory(selectedCategory);
@@ -73,35 +60,9 @@ export function PlacesScreen() {
 
   const handleCategoryFilter = (category: PlaceCategory | 'all') => {
     setSelectedCategory(category);
-    setSearchText(''); // Clear search when changing category
   };
 
-  const handleSearch = (text: string) => {
-    setSearchText(text);
-    setSelectedCategory('all'); // Reset category when searching
-  };
 
-  const handleAddPlace = async () => {
-    if (!newPlace.name.trim() || !newPlace.city.trim()) {
-      Alert.alert('Error', 'Please fill in required fields');
-      return;
-    }
-
-    const success = googlePlacesService.addCustomPlace({
-      name: newPlace.name,
-      category: newPlace.category,
-      city: newPlace.city,
-      description: newPlace.description || undefined
-    });
-
-    if (success) {
-      setShowAddModal(false);
-      setNewPlace({ name: '', city: '', description: '', category: 'restaurant' });
-      loadPlaces(); // Reload places
-    } else {
-      Alert.alert('Error', 'Place already exists');
-    }
-  };
 
   const handleEditPlace = (place: Place) => {
     setEditingPlace(place);
@@ -231,14 +192,6 @@ export function PlacesScreen() {
         </View>
       )}
 
-      {/* Search */}
-      <TextInput
-        testID="search-input"
-        style={styles.searchInput}
-        placeholder="Search places..."
-        value={searchText}
-        onChangeText={handleSearch}
-      />
 
       {/* Category Filters */}
       <View testID="category-filter" style={styles.categoryContainer}>
@@ -259,16 +212,6 @@ export function PlacesScreen() {
         style={styles.placesList}
       />
 
-      {/* Action Buttons */}
-      <View style={styles.actionButtonsContainer}>
-        <TouchableOpacity
-          testID="add-place-button"
-          style={styles.addButton}
-          onPress={() => setShowAddModal(true)}
-        >
-          <Text style={styles.addButtonText}>➕ Add Place</Text>
-        </TouchableOpacity>
-      </View>
 
       {/* Place Details Modal */}
       <Modal
@@ -306,56 +249,6 @@ export function PlacesScreen() {
         </View>
       </Modal>
 
-      {/* Add Place Modal */}
-      <Modal
-        visible={showAddModal}
-        animationType="slide"
-        transparent={true}
-      >
-        <View style={styles.modalOverlay}>
-          <View testID="add-place-modal" style={styles.modalContent}>
-            <Text style={styles.modalTitle}>Add Custom Place</Text>
-            
-            <TextInput
-              style={styles.input}
-              placeholder="Place name"
-              value={newPlace.name}
-              onChangeText={(text) => setNewPlace({...newPlace, name: text})}
-            />
-            
-            <TextInput
-              style={styles.input}
-              placeholder="City"
-              value={newPlace.city}
-              onChangeText={(text) => setNewPlace({...newPlace, city: text})}
-            />
-            
-            <TextInput
-              style={styles.input}
-              placeholder="Description"
-              value={newPlace.description}
-              onChangeText={(text) => setNewPlace({...newPlace, description: text})}
-            />
-
-            <View style={styles.modalButtons}>
-              <TouchableOpacity
-                testID="save-place-button"
-                style={styles.saveButton}
-                onPress={handleAddPlace}
-              >
-                <Text style={styles.saveButtonText}>Save</Text>
-              </TouchableOpacity>
-              
-              <TouchableOpacity
-                style={styles.cancelButton}
-                onPress={() => setShowAddModal(false)}
-              >
-                <Text style={styles.cancelButtonText}>Cancel</Text>
-              </TouchableOpacity>
-            </View>
-          </View>
-        </View>
-      </Modal>
 
       {/* Edit Place Modal */}
       <Modal
@@ -434,7 +327,7 @@ const styles = StyleSheet.create({
   container: {
     flex: 1,
     backgroundColor: '#fff',
-    paddingTop: 50,
+    paddingTop: 16,
     paddingHorizontal: 16,
   },
   loadingContainer: {
@@ -476,23 +369,14 @@ const styles = StyleSheet.create({
     marginTop: 8,
     marginBottom: 4,
   },
-  searchInput: {
-    height: 40,
-    borderWidth: 1,
-    borderColor: '#ddd',
-    borderRadius: 8,
-    paddingHorizontal: 12,
-    marginBottom: 16,
-    fontSize: 16,
-  },
   categoryContainer: {
     flexDirection: 'row',
     flexWrap: 'wrap',
     marginBottom: 16,
   },
   categoryButton: {
-    paddingHorizontal: 12,
-    paddingVertical: 6,
+    paddingHorizontal: 8,
+    paddingVertical: 4,
     backgroundColor: '#f0f0f0',
     borderRadius: 16,
     marginRight: 8,
@@ -502,7 +386,7 @@ const styles = StyleSheet.create({
     backgroundColor: '#007AFF',
   },
   categoryButtonText: {
-    fontSize: 14,
+    fontSize: 12,
     color: '#333',
   },
   activeCategoryButtonText: {
@@ -566,18 +450,6 @@ const styles = StyleSheet.create({
     fontSize: 12,
     color: '#999',
     fontStyle: 'italic',
-  },
-  addButton: {
-    backgroundColor: '#007AFF',
-    padding: 12,
-    borderRadius: 8,
-    flex: 1,
-    alignItems: 'center',
-  },
-  addButtonText: {
-    color: '#fff',
-    fontSize: 16,
-    fontWeight: '600',
   },
   modalOverlay: {
     flex: 1,
@@ -673,12 +545,6 @@ const styles = StyleSheet.create({
     color: '#333',
     fontSize: 16,
     fontWeight: '600',
-  },
-  // Action buttons styles
-  actionButtonsContainer: {
-    padding: 16,
-    justifyContent: 'center',
-    alignItems: 'center',
   },
   // Edit modal styles
   categoryLabel: {

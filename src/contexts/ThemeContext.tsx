@@ -4,8 +4,6 @@ import { ThemeService, Theme, ThemeColors } from '../services/ThemeService';
 interface ThemeContextType {
   theme: Theme;
   colors: ThemeColors;
-  toggleTheme: () => Promise<void>;
-  setTheme: (theme: Theme) => Promise<void>;
   isLoading: boolean;
 }
 
@@ -21,15 +19,26 @@ export const ThemeProvider: React.FC<ThemeProviderProps> = ({ children }) => {
   const themeService = new ThemeService();
 
   useEffect(() => {
-    loadSavedTheme();
+    loadSystemTheme();
+    
+    // Listen for system theme changes
+    if (typeof window !== 'undefined' && window.matchMedia) {
+      const mediaQuery = window.matchMedia('(prefers-color-scheme: dark)');
+      const handleChange = () => {
+        setThemeState(themeService.getSystemTheme());
+      };
+      
+      mediaQuery.addEventListener('change', handleChange);
+      return () => mediaQuery.removeEventListener('change', handleChange);
+    }
   }, []);
 
-  const loadSavedTheme = async () => {
+  const loadSystemTheme = async () => {
     try {
-      const savedTheme = await themeService.getCurrentTheme();
-      setThemeState(savedTheme);
+      const systemTheme = themeService.getSystemTheme();
+      setThemeState(systemTheme);
     } catch (error) {
-      console.error('Failed to load saved theme:', error);
+      console.error('Failed to load system theme:', error);
     } finally {
       setIsLoading(false);
     }
@@ -37,33 +46,9 @@ export const ThemeProvider: React.FC<ThemeProviderProps> = ({ children }) => {
 
   const colors = themeService.getThemeColors(theme);
 
-  const toggleTheme = async () => {
-    try {
-      const result = await themeService.toggleTheme();
-      if (result.success && result.newTheme) {
-        setThemeState(result.newTheme);
-      }
-    } catch (error) {
-      console.error('Failed to toggle theme:', error);
-    }
-  };
-
-  const setTheme = async (newTheme: Theme) => {
-    try {
-      const result = await themeService.setTheme(newTheme);
-      if (result.success) {
-        setThemeState(newTheme);
-      }
-    } catch (error) {
-      console.error('Failed to set theme:', error);
-    }
-  };
-
   const value: ThemeContextType = {
     theme,
     colors,
-    toggleTheme,
-    setTheme,
     isLoading
   };
 

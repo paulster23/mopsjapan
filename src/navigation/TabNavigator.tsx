@@ -48,7 +48,7 @@ export function TabNavigator() {
             tabBarIcon: ({ color, focused }) => (
               <Ionicons
                 name={getIconName(tab.icon, focused)}
-                size={24}
+                size={20}
                 color={color}
               />
             )
