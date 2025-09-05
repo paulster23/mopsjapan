@@ -55,6 +55,59 @@ if (Platform.OS === 'web') {
       });
     };
 
+    // Create prominent user location icon with glowing effect
+    const createUserLocationIcon = () => {
+      return new L.DivIcon({
+        className: 'user-location-icon',
+        html: `
+          <div style="
+            position: relative;
+            width: 20px; 
+            height: 20px;
+          ">
+            <!-- Pulsing outer ring -->
+            <div style="
+              position: absolute;
+              top: 50%;
+              left: 50%;
+              transform: translate(-50%, -50%);
+              width: 40px;
+              height: 40px;
+              background-color: rgba(59, 130, 246, 0.3);
+              border-radius: 50%;
+              animation: pulse 2s infinite;
+            "></div>
+            <!-- Inner blue dot -->
+            <div style="
+              position: absolute;
+              top: 50%;
+              left: 50%;
+              transform: translate(-50%, -50%);
+              width: 20px;
+              height: 20px;
+              background-color: #3B82F6;
+              border: 3px solid white;
+              border-radius: 50%;
+              box-shadow: 0 2px 8px rgba(59, 130, 246, 0.6);
+            "></div>
+          </div>
+          <style>
+            @keyframes pulse {
+              0% {
+                transform: translate(-50%, -50%) scale(0.8);
+                opacity: 1;
+              }
+              100% {
+                transform: translate(-50%, -50%) scale(2.0);
+                opacity: 0;
+              }
+            }
+          </style>`,
+        iconSize: [40, 40],
+        iconAnchor: [20, 20],
+      });
+    };
+
     const getColorIcon = (color: string, category?: string) => {
       return createColorIcon(color, category);
     };
@@ -68,6 +121,7 @@ if (Platform.OS === 'web') {
       showsMyLocationButton,
       ...props 
     }: any) => {
+      const [userLocation, setUserLocation] = React.useState<{latitude: number, longitude: number} | null>(null);
       
       useEffect(() => {
         // Ensure Leaflet CSS is loaded
@@ -95,6 +149,7 @@ if (Platform.OS === 'web') {
                 navigator.geolocation?.getCurrentPosition(
                   (position) => {
                     const { latitude, longitude } = position.coords;
+                    setUserLocation({ latitude, longitude });
                     map.target.setView([latitude, longitude], 13);
                   },
                   (error) => console.log('Location error:', error),
@@ -119,6 +174,24 @@ if (Platform.OS === 'web') {
               url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png"
               attribution='&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors'
             />
+            {/* User location marker with glowing blue dot */}
+            {userLocation && showsUserLocation && (
+              <LeafletMarker
+                position={[userLocation.latitude, userLocation.longitude]}
+                icon={createUserLocationIcon()}
+              >
+                <Popup>
+                  <div style={{ textAlign: 'center', minWidth: '120px' }}>
+                    <strong style={{ fontSize: '14px', display: 'block', marginBottom: '4px' }}>
+                      Your Location
+                    </strong>
+                    <span style={{ fontSize: '12px', color: '#666' }}>
+                      Current position
+                    </span>
+                  </div>
+                </Popup>
+              </LeafletMarker>
+            )}
             {children}
           </MapContainer>
         </View>
