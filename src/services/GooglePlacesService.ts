@@ -334,6 +334,43 @@ export class GooglePlacesService {
     return true;
   }
 
+  updatePlace(placeId: string, updates: Partial<Pick<Place, 'name' | 'category' | 'description'>>): boolean {
+    // Find place in synced places (only synced places can be edited)
+    const placeIndex = this.syncedPlaces.findIndex(place => place.id === placeId);
+    
+    if (placeIndex === -1) {
+      // Place not found in synced places - it might be a static place
+      console.warn('Cannot edit static places. Only custom places can be edited.');
+      return false;
+    }
+
+    // Check if new name conflicts with existing places (if name is being updated)
+    if (updates.name && updates.name !== this.syncedPlaces[placeIndex].name) {
+      const conflictingPlace = this.getPlaceDetails(updates.name);
+      if (conflictingPlace && conflictingPlace.id !== placeId) {
+        return false; // Name conflict
+      }
+    }
+
+    // Update the place
+    this.syncedPlaces[placeIndex] = {
+      ...this.syncedPlaces[placeIndex],
+      ...updates
+    };
+
+    // If name changed, update the ID as well
+    if (updates.name) {
+      this.syncedPlaces[placeIndex].id = this.generatePlaceId(updates.name);
+    }
+
+    // Save to storage asynchronously
+    this.saveSyncedPlaces().catch(error => {
+      console.error('Failed to save synced places after updating:', error);
+    });
+
+    return true;
+  }
+
   exportPlacesForCalendar(places: Place[]): CalendarEvent[] {
     return places.map(place => ({
       summary: place.name,

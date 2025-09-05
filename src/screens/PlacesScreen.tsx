@@ -12,12 +12,19 @@ export function PlacesScreen() {
   const [searchText, setSearchText] = useState('');
   const [selectedPlace, setSelectedPlace] = useState<Place | null>(null);
   const [showAddModal, setShowAddModal] = useState(false);
+  const [showEditModal, setShowEditModal] = useState(false);
+  const [editingPlace, setEditingPlace] = useState<Place | null>(null);
   const [showStats, setShowStats] = useState(false);
   const [newPlace, setNewPlace] = useState({
     name: '',
     city: '',
     description: '',
     category: 'restaurant' as PlaceCategory
+  });
+  const [editPlace, setEditPlace] = useState({
+    name: '',
+    category: 'restaurant' as PlaceCategory,
+    description: ''
   });
 
   // Services
@@ -96,8 +103,47 @@ export function PlacesScreen() {
     }
   };
 
+  const handleEditPlace = (place: Place) => {
+    setEditingPlace(place);
+    setEditPlace({
+      name: place.name,
+      category: place.category,
+      description: place.description || ''
+    });
+    setShowEditModal(true);
+  };
+
+  const handleUpdatePlace = async () => {
+    if (!editPlace.name.trim()) {
+      Alert.alert('Error', 'Place name cannot be empty');
+      return;
+    }
+
+    if (!editingPlace) return;
+
+    const success = googlePlacesService.updatePlace(editingPlace.id, {
+      name: editPlace.name,
+      category: editPlace.category,
+      description: editPlace.description || undefined
+    });
+
+    if (success) {
+      setShowEditModal(false);
+      setEditingPlace(null);
+      setEditPlace({ name: '', category: 'restaurant', description: '' });
+      loadPlaces(); // Reload places
+    } else {
+      Alert.alert('Error', 'Failed to update place. Name might already exist or place is read-only.');
+    }
+  };
+
 
   const stats = googlePlacesService.getPlaceStatistics();
+
+  const isCustomPlace = (place: Place): boolean => {
+    // Check if place is in synced places (custom places that can be edited)
+    return googlePlacesService['syncedPlaces'].some(syncedPlace => syncedPlace.id === place.id);
+  };
 
   const renderPlace = ({ item }: { item: Place }) => (
     <TouchableOpacity
@@ -106,7 +152,20 @@ export function PlacesScreen() {
     >
       <View style={styles.placeHeader}>
         <Text style={styles.placeName}>{item.name}</Text>
-        <Text style={styles.placeCategory}>{item.category.charAt(0).toUpperCase() + item.category.slice(1)}</Text>
+        <View style={styles.placeHeaderRight}>
+          <Text style={styles.placeCategory}>{item.category.charAt(0).toUpperCase() + item.category.slice(1)}</Text>
+          {isCustomPlace(item) && (
+            <TouchableOpacity
+              style={styles.editButton}
+              onPress={(e) => {
+                e.stopPropagation();
+                handleEditPlace(item);
+              }}
+            >
+              <Text style={styles.editButtonText}>✏️</Text>
+            </TouchableOpacity>
+          )}
+        </View>
       </View>
       <Text style={styles.placeCity}>{item.city}</Text>
       {item.description && (
@@ -298,6 +357,75 @@ export function PlacesScreen() {
         </View>
       </Modal>
 
+      {/* Edit Place Modal */}
+      <Modal
+        visible={showEditModal}
+        animationType="slide"
+        transparent={true}
+      >
+        <View style={styles.modalOverlay}>
+          <View testID="edit-place-modal" style={styles.modalContent}>
+            <Text style={styles.modalTitle}>Edit Place</Text>
+            
+            <TextInput
+              style={styles.input}
+              placeholder="Place name"
+              value={editPlace.name}
+              onChangeText={(text) => setEditPlace({...editPlace, name: text})}
+            />
+
+            <Text style={styles.categoryLabel}>Category:</Text>
+            <View style={styles.categorySelector}>
+              {['accommodation', 'restaurant', 'entertainment', 'transport', 'shopping'].map((category) => (
+                <TouchableOpacity
+                  key={category}
+                  style={[
+                    styles.categorySelectorButton,
+                    editPlace.category === category && styles.categorySelectorButtonActive
+                  ]}
+                  onPress={() => setEditPlace({...editPlace, category: category as PlaceCategory})}
+                >
+                  <Text style={[
+                    styles.categorySelectorButtonText,
+                    editPlace.category === category && styles.categorySelectorButtonTextActive
+                  ]}>
+                    {category.charAt(0).toUpperCase() + category.slice(1)}
+                  </Text>
+                </TouchableOpacity>
+              ))}
+            </View>
+            
+            <TextInput
+              style={styles.input}
+              placeholder="Description (optional)"
+              value={editPlace.description}
+              onChangeText={(text) => setEditPlace({...editPlace, description: text})}
+              multiline
+            />
+
+            <View style={styles.modalButtons}>
+              <TouchableOpacity
+                testID="update-place-button"
+                style={styles.saveButton}
+                onPress={handleUpdatePlace}
+              >
+                <Text style={styles.saveButtonText}>Update</Text>
+              </TouchableOpacity>
+              
+              <TouchableOpacity
+                style={styles.cancelButton}
+                onPress={() => {
+                  setShowEditModal(false);
+                  setEditingPlace(null);
+                }}
+              >
+                <Text style={styles.cancelButtonText}>Cancel</Text>
+              </TouchableOpacity>
+            </View>
+          </View>
+        </View>
+      </Modal>
+
     </View>
   );
 }
@@ -401,6 +529,19 @@ const styles = StyleSheet.create({
     justifyContent: 'space-between',
     alignItems: 'center',
     marginBottom: 4,
+  },
+  placeHeaderRight: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+  },
+  editButton: {
+    padding: 4,
+    borderRadius: 4,
+    backgroundColor: '#f0f0f0',
+  },
+  editButtonText: {
+    fontSize: 14,
   },
   placeName: {
     fontSize: 16,
@@ -538,5 +679,37 @@ const styles = StyleSheet.create({
     padding: 16,
     justifyContent: 'center',
     alignItems: 'center',
+  },
+  // Edit modal styles
+  categoryLabel: {
+    fontSize: 16,
+    fontWeight: '600',
+    marginBottom: 8,
+    color: '#333',
+  },
+  categorySelector: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    marginBottom: 16,
+    gap: 8,
+  },
+  categorySelectorButton: {
+    paddingHorizontal: 12,
+    paddingVertical: 8,
+    backgroundColor: '#f0f0f0',
+    borderRadius: 16,
+    borderWidth: 1,
+    borderColor: '#ddd',
+  },
+  categorySelectorButtonActive: {
+    backgroundColor: '#007AFF',
+    borderColor: '#007AFF',
+  },
+  categorySelectorButtonText: {
+    fontSize: 12,
+    color: '#333',
+  },
+  categorySelectorButtonTextActive: {
+    color: '#fff',
   },
 });
