@@ -294,4 +294,40 @@ Before every code change, auto-check:
 
 
 # PROJECT SPECIFIC RULES
-This app will be used to help me navigate Tokyo, it is imperative that you use real time data sources and are explict about any estimates or test data that you use. 
+This app will be used to help me navigate Tokyo, it is imperative that you use real time data sources and are explict about any estimates or test data that you use.
+
+# PRODUCTION-ONLY WORKFLOW
+This project uses PRODUCTION BUILDS EXCLUSIVELY for development and deployment.
+
+## Why Production-Only?
+- Development server has TurboModule compatibility issues that don't exist in production builds
+- Production builds are stable, optimized, and work perfectly for this transit navigation app
+- Simpler workflow eliminates development server complexity
+
+## Standard Workflow Commands:
+```bash
+# Primary development command
+npm run web          # Builds production app and serves at http://localhost:8080
+
+# Individual commands (if needed)
+npm run build        # Creates optimized production build in dist/
+npm run serve        # Serves existing dist/ at http://localhost:8080
+npm run dev          # Same as npm run web (builds + serves)
+npm run deploy       # Same as npm run web (builds + serves)
+```
+
+## Development Process:
+1. Make code changes
+2. Run `npm run web` 
+3. Test at http://localhost:8080
+4. Repeat until satisfied
+5. Commit and push
+
+## NEVER USE:
+- `expo start --web` (development server - has TurboModule errors)
+- `npm run start` then select web (same issue)
+
+## Current Working State:
+- Commit 8860cdd: "BREAKPOINT: FINALLY got this one to work, revert back here"
+- Production builds work perfectly
+- All TurboModule issues resolved in production mode 
