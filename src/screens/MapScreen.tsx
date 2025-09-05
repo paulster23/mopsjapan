@@ -8,7 +8,7 @@ import { TokyoODPTService } from '../services/TokyoODPTService';
 import { RouteCalculationService, RouteOption, Route } from '../services/RouteCalculationService';
 import { StationFinderService } from '../services/StationFinderService';
 import { sharedGooglePlacesService } from '../services/SharedServices';
-import { Place } from '../services/GooglePlacesService';
+import { Place, PlaceCategory } from '../services/GooglePlacesService';
 
 interface UserLocation {
   latitude: number;
@@ -57,6 +57,8 @@ export function MapScreen() {
   
   // Map-related state
   const [places, setPlaces] = useState<Place[]>([]);
+  const [filteredPlaces, setFilteredPlaces] = useState<Place[]>([]);
+  const [selectedCategory, setSelectedCategory] = useState<PlaceCategory | 'all'>('all');
   const [mapRegion, setMapRegion] = useState({
     latitude: 35.6812, // Default to Tokyo
     longitude: 139.7671,
@@ -90,9 +92,27 @@ export function MapScreen() {
     }
   }, [userLocation]);
 
+  // Filter places when category or places change
+  useEffect(() => {
+    filterPlaces();
+  }, [places, selectedCategory]);
+
   const loadPlaces = () => {
     const allPlaces = sharedGooglePlacesService.getAllPlaces();
     setPlaces(allPlaces);
+  };
+
+  const filterPlaces = () => {
+    if (selectedCategory === 'all') {
+      setFilteredPlaces(places);
+    } else {
+      const filtered = sharedGooglePlacesService.getPlacesByCategory(selectedCategory);
+      setFilteredPlaces(filtered);
+    }
+  };
+
+  const handleCategoryFilter = (category: PlaceCategory | 'all') => {
+    setSelectedCategory(category);
   };
 
   const checkOfflineData = async () => {
@@ -281,6 +301,24 @@ export function MapScreen() {
     }
   };
 
+  const CategoryButton = ({ category, label }: { category: PlaceCategory | 'all'; label: string }) => (
+    <TouchableOpacity
+      testID={`filter-${category}`}
+      style={[
+        themedStyles.categoryButton,
+        selectedCategory === category && themedStyles.activeCategoryButton
+      ]}
+      onPress={() => handleCategoryFilter(category)}
+    >
+      <Text style={[
+        themedStyles.categoryButtonText,
+        selectedCategory === category && themedStyles.activeCategoryButtonText
+      ]}>
+        {label}
+      </Text>
+    </TouchableOpacity>
+  );
+
   const themedStyles = createThemedStyles(colors, theme);
   
   return (
@@ -322,6 +360,16 @@ export function MapScreen() {
         </View>
       </View>
 
+      {/* Category Filters */}
+      <View testID="category-filter" style={themedStyles.categoryContainer}>
+        <CategoryButton category="all" label="All" />
+        <CategoryButton category="accommodation" label="Hotels" />
+        <CategoryButton category="restaurant" label="Restaurants" />
+        <CategoryButton category="entertainment" label="Entertainment" />
+        <CategoryButton category="transport" label="Transport" />
+        <CategoryButton category="shopping" label="Shopping" />
+      </View>
+
       <MapView
         testID="interactive-map-view"
         style={themedStyles.mapContainer}
@@ -346,7 +394,7 @@ export function MapScreen() {
 
         {/* Place markers */}
         <View testID="place-markers">
-          {places
+          {filteredPlaces
             .filter(place => place.coordinates) // Only show places with coordinates
             .map((place) => (
               <Marker
@@ -629,6 +677,35 @@ const createThemedStyles = (colors: any, theme: string) => StyleSheet.create({
   },
   stationsContainer: {
     gap: 8,
+  },
+  categoryContainer: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    marginBottom: 16,
+    paddingHorizontal: 16,
+  },
+  categoryButton: {
+    paddingHorizontal: 12,
+    paddingVertical: 6,
+    backgroundColor: colors.surface,
+    borderRadius: 16,
+    marginRight: 8,
+    marginBottom: 8,
+    borderWidth: 1,
+    borderColor: colors.border,
+  },
+  activeCategoryButton: {
+    backgroundColor: colors.primary,
+    borderColor: colors.primary,
+  },
+  categoryButtonText: {
+    fontSize: 14,
+    color: colors.text,
+    fontWeight: '500',
+  },
+  activeCategoryButtonText: {
+    color: colors.background,
+    fontWeight: '600',
   },
   delaysContainer: {
     marginTop: 8,

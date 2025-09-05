@@ -1,10 +1,8 @@
 import React, { useEffect, useState, useCallback } from 'react';
-import { View, Text, StyleSheet, TouchableOpacity, FlatList, TextInput, Modal, Alert, Linking, Platform } from 'react-native';
+import { View, Text, StyleSheet, TouchableOpacity, FlatList, TextInput, Modal, Alert } from 'react-native';
 import { useFocusEffect } from '@react-navigation/native';
-import { MapView, Marker } from '../components/PlatformMapView';
 import { Place, PlaceCategory } from '../services/GooglePlacesService';
 import { sharedGooglePlacesService } from '../services/SharedServices';
-import { LocationService } from '../services/LocationService';
 
 export function PlacesScreen() {
   const [places, setPlaces] = useState<Place[]>([]);
@@ -15,14 +13,6 @@ export function PlacesScreen() {
   const [selectedPlace, setSelectedPlace] = useState<Place | null>(null);
   const [showAddModal, setShowAddModal] = useState(false);
   const [showStats, setShowStats] = useState(false);
-  const [viewMode, setViewMode] = useState<'list' | 'map'>('list');
-  const [mapRegion, setMapRegion] = useState({
-    latitude: 35.6812, // Default to Tokyo
-    longitude: 139.7671,
-    latitudeDelta: 0.05,
-    longitudeDelta: 0.05,
-  });
-  const [userLocation, setUserLocation] = useState<{ latitude: number; longitude: number } | null>(null);
   const [newPlace, setNewPlace] = useState({
     name: '',
     city: '',
@@ -32,11 +22,9 @@ export function PlacesScreen() {
 
   // Services
   const googlePlacesService = sharedGooglePlacesService;
-  const locationService = new LocationService();
 
   useEffect(() => {
     loadPlaces();
-    getUserLocation();
   }, []);
 
   useEffect(() => {
@@ -50,21 +38,6 @@ export function PlacesScreen() {
     }, [])
   );
 
-  const getUserLocation = async () => {
-    try {
-      // Use location override service or fallback to default Tokyo location
-      const defaultLocation = { latitude: 35.6812, longitude: 139.7671 };
-      setUserLocation(defaultLocation);
-      setMapRegion({
-        latitude: defaultLocation.latitude,
-        longitude: defaultLocation.longitude,
-        latitudeDelta: 0.05,
-        longitudeDelta: 0.05,
-      });
-    } catch (error) {
-      console.error('Failed to get location:', error);
-    }
-  };
 
   const loadPlaces = async () => {
     try {
@@ -123,48 +96,6 @@ export function PlacesScreen() {
     }
   };
 
-  const handleMarkerPress = async (place: Place) => {
-    if (!place.coordinates) {
-      Alert.alert('No Location', 'This place does not have location coordinates');
-      return;
-    }
-
-    const { latitude, longitude } = place.coordinates;
-    
-    // Create Google Maps URL for directions
-    const destination = `${latitude},${longitude}`;
-    const label = encodeURIComponent(place.name);
-    
-    // Try to open in Google Maps app, fallback to web
-    const googleMapsUrl = Platform.OS === 'ios' 
-      ? `comgooglemaps://?daddr=${destination}&directionsmode=transit&zoom=14&views=traffic`
-      : `google.navigation:q=${destination}&mode=transit`;
-    
-    const webFallbackUrl = `https://www.google.com/maps/dir/?api=1&destination=${destination}&travelmode=transit`;
-    
-    try {
-      const canOpen = await Linking.canOpenURL(googleMapsUrl);
-      if (canOpen) {
-        await Linking.openURL(googleMapsUrl);
-      } else {
-        await Linking.openURL(webFallbackUrl);
-      }
-    } catch (error) {
-      console.error('Error opening maps:', error);
-      Alert.alert('Error', 'Could not open maps application');
-    }
-  };
-
-  const getMarkerColorByCategory = (category: string): string => {
-    switch (category) {
-      case 'accommodation': return 'purple';
-      case 'restaurant': return 'orange';
-      case 'entertainment': return 'green';
-      case 'transport': return 'blue';
-      case 'shopping': return 'red';
-      default: return 'red';
-    }
-  };
 
   const stats = googlePlacesService.getPlaceStatistics();
 
@@ -260,76 +191,14 @@ export function PlacesScreen() {
         <CategoryButton category="shopping" label="Shopping" />
       </View>
 
-      {/* View Toggle */}
-      <View testID="view-toggle" style={styles.viewToggle}>
-        <TouchableOpacity
-          style={[styles.toggleButton, viewMode === 'list' && styles.activeToggle]}
-          onPress={() => setViewMode('list')}
-        >
-          <Text style={styles.toggleText}>List</Text>
-        </TouchableOpacity>
-        <TouchableOpacity
-          style={[styles.toggleButton, viewMode === 'map' && styles.activeToggle]}
-          onPress={() => setViewMode('map')}
-        >
-          <Text style={styles.toggleText}>Map</Text>
-        </TouchableOpacity>
-      </View>
-
-      {/* Content */}
-      {viewMode === 'list' ? (
-        <FlatList
-          testID="places-list"
-          data={filteredPlaces}
-          renderItem={renderPlace}
-          keyExtractor={(item) => item.id}
-          style={styles.placesList}
-        />
-      ) : (
-        <View testID="map-view-active" style={styles.mapContainer}>
-          <MapView
-            testID="places-map-view"
-            style={styles.mapView}
-            region={mapRegion}
-            showsUserLocation={true}
-            showsMyLocationButton={true}
-            onRegionChangeComplete={setMapRegion}
-          >
-            {/* Current location marker */}
-            {userLocation && (
-              <Marker
-                testID="current-location-marker"
-                coordinate={{
-                  latitude: userLocation.latitude,
-                  longitude: userLocation.longitude,
-                }}
-                title="Your Location"
-                description="Current position"
-                pinColor="blue"
-              />
-            )}
-
-            {/* Place markers */}
-            <View testID="place-markers">
-              {filteredPlaces
-                .filter(place => place.coordinates) // Only show places with coordinates
-                .map((place) => (
-                  <Marker
-                    key={place.id}
-                    coordinate={{
-                      latitude: place.coordinates!.latitude,
-                      longitude: place.coordinates!.longitude,
-                    }}
-                    title={place.name}
-                    description={`${place.category} in ${place.city}`}
-                    onPress={() => handleMarkerPress(place)}
-                    pinColor={getMarkerColorByCategory(place.category)}
-                  />
-                ))}
-            </View>
-          </MapView>
-        </View>
-      )}
+      {/* Places List */}
+      <FlatList
+        testID="places-list"
+        data={filteredPlaces}
+        renderItem={renderPlace}
+        keyExtractor={(item) => item.id}
+        style={styles.placesList}
+      />
 
       {/* Action Buttons */}
       <View style={styles.actionButtonsContainer}>
@@ -511,26 +380,6 @@ const styles = StyleSheet.create({
   activeCategoryButtonText: {
     color: '#fff',
   },
-  viewToggle: {
-    flexDirection: 'row',
-    marginBottom: 16,
-    backgroundColor: '#f0f0f0',
-    borderRadius: 8,
-    padding: 2,
-  },
-  toggleButton: {
-    flex: 1,
-    paddingVertical: 8,
-    alignItems: 'center',
-    borderRadius: 6,
-  },
-  activeToggle: {
-    backgroundColor: '#007AFF',
-  },
-  toggleText: {
-    fontSize: 14,
-    color: '#333',
-  },
   placesList: {
     flex: 1,
   },
@@ -576,14 +425,6 @@ const styles = StyleSheet.create({
     fontSize: 12,
     color: '#999',
     fontStyle: 'italic',
-  },
-  mapContainer: {
-    flex: 1,
-  },
-  mapView: {
-    flex: 1,
-    borderRadius: 8,
-    overflow: 'hidden',
   },
   addButton: {
     backgroundColor: '#007AFF',
