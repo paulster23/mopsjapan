@@ -34,7 +34,6 @@ export interface PlaceStatistics {
 
 export class GooglePlacesService {
   private locationService: LocationService;
-  private staticPlaces: Place[] = [];
   private syncedPlaces: Place[] = [];
   private readonly SYNCED_PLACES_KEY = 'syncedPlaces';
 
@@ -45,193 +44,8 @@ export class GooglePlacesService {
   }
 
   loadCustomMapPlaces(): Place[] {
-    // Custom places from the user's Google My Maps
-    const places: Place[] = [
-      // Accommodations
-      {
-        id: 'sakura-hotel-hatagaya',
-        name: 'Sakura Hotel Hatagaya',
-        category: 'accommodation',
-        city: 'Tokyo',
-        coordinates: { latitude: 35.6684, longitude: 139.6645 },
-        description: "Devin's Hotel"
-      },
-      {
-        id: 'hotel-fukudaya',
-        name: 'Hotel Fukudaya',
-        category: 'accommodation',
-        city: 'Tokyo',
-        coordinates: { latitude: 35.6762, longitude: 139.6503 },
-        description: 'booked on Agoda 9/15-17'
-      },
-      {
-        id: 'smile-hotel-nara',
-        name: 'Smile Hotel Nara',
-        category: 'accommodation',
-        city: 'Nara',
-        coordinates: { latitude: 34.6851, longitude: 135.8048 }
-      },
-      {
-        id: 'minoo-kakogawasanso',
-        name: 'Minoo Kakogawasanso',
-        category: 'accommodation',
-        city: 'Osaka',
-        coordinates: { latitude: 34.7695, longitude: 135.4698 },
-        description: 'Ryokan Stay'
-      },
-      
-      // Restaurants/Bars
-      {
-        id: 'shinjuku-nine-spices',
-        name: 'Shinjuku NINE SPICES',
-        category: 'restaurant',
-        city: 'Tokyo',
-        coordinates: { latitude: 35.6938, longitude: 139.7034 }
-      },
-      {
-        id: 'ich-ni-san-hibiya',
-        name: 'Ich-ni-san (Hibiya branch)',
-        category: 'restaurant',
-        city: 'Tokyo',
-        coordinates: { latitude: 35.6751, longitude: 139.7594 },
-        description: 'beef katsu'
-      },
-      {
-        id: 'gyukatsu-ichi-ni-san',
-        name: 'Gyukatsu Ichi Ni San',
-        category: 'restaurant',
-        city: 'Tokyo',
-        coordinates: { latitude: 35.6684, longitude: 139.7034 },
-        description: 'hole in the wall jazz cook beef katsu'
-      },
-      {
-        id: 'conpass-osaka',
-        name: 'Conpass',
-        category: 'restaurant',
-        city: 'Osaka',
-        coordinates: { latitude: 34.6937, longitude: 135.5023 }
-      },
-      
-      // Entertainment
-      {
-        id: 'live-house-fever',
-        name: 'Live House Fever',
-        category: 'entertainment',
-        city: 'Tokyo',
-        coordinates: { latitude: 35.6684, longitude: 139.7034 }
-      },
-      {
-        id: 'stiff-slack-nagoya',
-        name: 'Stiff Slack',
-        category: 'entertainment',
-        city: 'Nagoya',
-        coordinates: { latitude: 35.1815, longitude: 136.9066 }
-      },
-      {
-        id: 'kapital-legs-roppongi',
-        name: 'KAPITAL Legs Roppongi',
-        category: 'entertainment',
-        city: 'Tokyo',
-        coordinates: { latitude: 35.6627, longitude: 139.7345 }
-      },
-      
-      // Transport
-      {
-        id: 'haneda-airport',
-        name: 'Haneda Airport',
-        category: 'transport',
-        city: 'Tokyo',
-        coordinates: { latitude: 35.5494, longitude: 139.7798 }
-      },
-      {
-        id: 'akihabara-station',
-        name: 'Akihabara Station',
-        category: 'transport',
-        city: 'Tokyo',
-        coordinates: { latitude: 35.6986, longitude: 139.7731 }
-      },
-      {
-        id: 'tokyo-station',
-        name: 'Tokyo Station',
-        category: 'transport',
-        city: 'Tokyo',
-        coordinates: { latitude: 35.6812, longitude: 139.7671 }
-      },
-      {
-        id: 'naka-meguro-station',
-        name: 'Naka-meguro Station',
-        category: 'transport',
-        city: 'Tokyo',
-        coordinates: { latitude: 35.6439, longitude: 139.6988 }
-      },
-      {
-        id: 'nikko-station',
-        name: 'Nikko Station',
-        category: 'transport',
-        city: 'Nikko',
-        coordinates: { latitude: 36.7569, longitude: 139.6231 }
-      },
-      
-      // Shopping
-      {
-        id: 'shimokitazawa',
-        name: 'Shimokitazawa',
-        category: 'shopping',
-        city: 'Tokyo',
-        coordinates: { latitude: 35.6617, longitude: 139.6681 },
-        description: 'vintage shops & cafes'
-      },
-      {
-        id: 'koenjikita',
-        name: 'Koenjikita',
-        category: 'shopping',
-        city: 'Tokyo',
-        coordinates: { latitude: 35.7057, longitude: 139.6489 },
-        description: 'thrift stores'
-      },
-      {
-        id: 'hands-shibuya',
-        name: 'Hands Shibuya',
-        category: 'shopping',
-        city: 'Tokyo',
-        coordinates: { latitude: 35.6598, longitude: 139.7023 }
-      },
-      
-      // New places from Google Map
-      {
-        id: 'don-quijote-shibuya',
-        name: 'Don Quijote Shibuya',
-        category: 'shopping',
-        city: 'Tokyo'
-      },
-      {
-        id: 'sensoji-temple',
-        name: 'Sensoji Temple',
-        category: 'entertainment',
-        city: 'Tokyo'
-      },
-      {
-        id: 'meiji-shrine',
-        name: 'Meiji Shrine',
-        category: 'entertainment',
-        city: 'Tokyo'
-      },
-      {
-        id: 'tsukiji-outer-market',
-        name: 'Tsukiji Outer Market',
-        category: 'restaurant',
-        city: 'Tokyo'
-      },
-      {
-        id: 'golden-gai',
-        name: 'Golden Gai',
-        category: 'restaurant',
-        city: 'Tokyo'
-      }
-    ];
-
-    this.staticPlaces = places;
-    return places;
+    // No static places - all places are now synced from external sources
+    return [];
   }
 
   private async loadSyncedPlaces(): Promise<void> {
@@ -335,12 +149,10 @@ export class GooglePlacesService {
   }
 
   updatePlace(placeId: string, updates: Partial<Pick<Place, 'name' | 'category' | 'description'>>): boolean {
-    // Find place in synced places (only synced places can be edited)
+    // Find place in synced places
     const placeIndex = this.syncedPlaces.findIndex(place => place.id === placeId);
     
     if (placeIndex === -1) {
-      // Place not found in synced places - it might be a static place
-      console.warn('Cannot edit static places. Only custom places can be edited.');
       return false;
     }
 
@@ -412,23 +224,8 @@ export class GooglePlacesService {
   }
 
   getAllPlaces(): Place[] {
-    // Load static places if not already loaded
-    if (this.staticPlaces.length === 0) {
-      this.loadCustomMapPlaces();
-    }
-    
-    // Merge static and synced places, avoiding duplicates
-    const allPlaces = [...this.staticPlaces];
-    const staticNames = new Set(this.staticPlaces.map(p => p.name));
-    
-    // Add synced places that don't conflict with static ones
-    for (const syncedPlace of this.syncedPlaces) {
-      if (!staticNames.has(syncedPlace.name)) {
-        allPlaces.push(syncedPlace);
-      }
-    }
-    
-    return allPlaces;
+    // Return only synced places
+    return [...this.syncedPlaces];
   }
 
   private generatePlaceId(name: string): string {

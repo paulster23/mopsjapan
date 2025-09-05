@@ -27,43 +27,12 @@ describe('GooglePlacesService', () => {
     it('should load places from custom Google My Maps data', () => {
       const places = service.loadCustomMapPlaces();
 
-      expect(places).toHaveLength(24); // Total places from the map (original 19 + 5 new)
-      
-      // Check accommodations
-      const hotels = places.filter(p => p.category === 'accommodation');
-      expect(hotels).toHaveLength(4);
-      expect(hotels.find(h => h.name === 'Sakura Hotel Hatagaya')).toBeDefined();
-      expect(hotels.find(h => h.name === 'Hotel Fukudaya')).toBeDefined();
-      
-      // Check restaurants
-      const restaurants = places.filter(p => p.category === 'restaurant');
-      expect(restaurants).toHaveLength(6); // Original 4 + 2 new restaurants
-      expect(restaurants.find(r => r.name === 'Shinjuku NINE SPICES')).toBeDefined();
-      expect(restaurants.find(r => r.name === 'Gyukatsu Ichi Ni San')).toBeDefined();
-      
-      // Check entertainment venues
-      const entertainment = places.filter(p => p.category === 'entertainment');
-      expect(entertainment).toHaveLength(5); // Original 3 + 2 new entertainment
-      expect(entertainment.find(e => e.name === 'Live House Fever')).toBeDefined();
-      
-      // Check transport stations
-      const transport = places.filter(p => p.category === 'transport');
-      expect(transport).toHaveLength(5);
-      expect(transport.find(t => t.name === 'Tokyo Station')).toBeDefined();
-      expect(transport.find(t => t.name === 'Haneda Airport')).toBeDefined();
+      expect(places).toHaveLength(0); // No static places - all places are now synced
     });
 
-    it('should include location coordinates and descriptions for places', () => {
+    it('should return empty places since no static places exist', () => {
       const places = service.loadCustomMapPlaces();
-      
-      const hotelFukudaya = places.find(p => p.name === 'Hotel Fukudaya');
-      expect(hotelFukudaya).toBeDefined();
-      expect(hotelFukudaya?.description).toContain('booked on Agoda 9/15-17');
-      expect(hotelFukudaya?.city).toBe('Tokyo');
-      
-      const shimokitazawa = places.find(p => p.name === 'Shimokitazawa');
-      expect(shimokitazawa?.description).toContain('vintage shops & cafes');
-      expect(shimokitazawa?.category).toBe('shopping');
+      expect(places).toHaveLength(0); // No static places in synced-only model
     });
   });
 
@@ -219,15 +188,20 @@ describe('GooglePlacesService', () => {
     });
 
     it('should not add duplicate places', () => {
-      const existingPlace = {
-        name: 'Tokyo Station',
-        category: 'transport' as const,
+      const newPlace = {
+        name: 'Test Duplicate Place',
+        category: 'restaurant' as const,
         city: 'Tokyo',
         coordinates: { latitude: 35.6812, longitude: 139.7671 }
       };
 
-      const added = service.addCustomPlace(existingPlace);
-      expect(added).toBe(false);
+      // Add the place first time - should succeed
+      const firstAdd = service.addCustomPlace(newPlace);
+      expect(firstAdd).toBe(true);
+
+      // Try to add the same place again - should fail
+      const secondAdd = service.addCustomPlace(newPlace);
+      expect(secondAdd).toBe(false);
     });
   });
 
@@ -267,6 +241,72 @@ describe('GooglePlacesService', () => {
       expect(stats.byCity.Osaka).toBeGreaterThan(0);
       expect(stats.byCity.Nara).toBeGreaterThan(0);
       expect(stats.byCity.Nagoya).toBeGreaterThan(0);
+    });
+  });
+
+  describe('Synced-Only Storage Model', () => {
+    it('should return only synced places when no static places exist', async () => {
+      // Mock AsyncStorage to return synced places
+      const syncedPlaces = [
+        {
+          id: 'synced-place-1',
+          name: 'Test Synced Place',
+          category: 'restaurant' as const,
+          city: 'Tokyo'
+        }
+      ];
+      
+      (AsyncStorage.getItem as jest.Mock).mockResolvedValue(JSON.stringify(syncedPlaces));
+
+      // Create new service instance
+      const newService = new GooglePlacesService(mockLocationService);
+      await new Promise(resolve => setTimeout(resolve, 0));
+
+      const result = newService.getAllPlaces();
+
+      // Should return only synced places, no static places
+      expect(result).toEqual(syncedPlaces);
+      expect(result.length).toBe(1);
+    });
+
+    it('should allow updating any synced place', async () => {
+      // Mock existing synced places
+      const syncedPlaces = [
+        {
+          id: 'place-1',
+          name: 'Original Name',
+          category: 'restaurant' as const,
+          city: 'Tokyo'
+        }
+      ];
+      
+      (AsyncStorage.getItem as jest.Mock).mockResolvedValue(JSON.stringify(syncedPlaces));
+      (AsyncStorage.setItem as jest.Mock).mockResolvedValue(undefined);
+
+      const newService = new GooglePlacesService(mockLocationService);
+      await new Promise(resolve => setTimeout(resolve, 0));
+
+      const result = newService.updatePlace('place-1', { 
+        name: 'Updated Name',
+        category: 'shopping' as const
+      });
+
+      expect(result).toBe(true);
+      expect(AsyncStorage.setItem).toHaveBeenCalledWith(
+        'syncedPlaces',
+        expect.stringContaining('Updated Name')
+      );
+    });
+
+    it('should return empty array when no synced places exist', async () => {
+      (AsyncStorage.getItem as jest.Mock).mockResolvedValue(null);
+
+      const newService = new GooglePlacesService(mockLocationService);
+      await new Promise(resolve => setTimeout(resolve, 0));
+
+      const result = newService.getAllPlaces();
+
+      expect(result).toEqual([]);
     });
   });
 
