@@ -287,42 +287,82 @@ export function MapScreen() {
     <View style={[themedStyles.container]} testID="map-container">
       <View style={themedStyles.header}>
         <Text style={themedStyles.title}>Map & Location</Text>
-        <TouchableOpacity 
-          style={themedStyles.themeButton}
-          onPress={toggleTheme}
-        >
-          <Text style={themedStyles.themeButtonText}>
-            {theme === 'light' ? '🌙' : '☀️'}
-          </Text>
-        </TouchableOpacity>
-      </View>
-      
-      <View style={themedStyles.locationSection}>
-        <Text style={themedStyles.sectionTitle}>Your Location</Text>
-        <Text style={themedStyles.locationStatus}>{locationStatus}</Text>
-        
-        <TouchableOpacity 
-          style={themedStyles.locationButton} 
-          onPress={handleGetLocation}
-          disabled={loading}
-        >
-          <Text style={themedStyles.buttonText}>
-            {loading ? 'Getting Location...' : 'Update Location'}
-          </Text>
-        </TouchableOpacity>
-
-        {hasCachedData && (
+        <View style={themedStyles.headerControls}>
+          <View style={themedStyles.compactLocationControls}>
+            <TouchableOpacity 
+              style={themedStyles.compactLocationButton} 
+              onPress={handleGetLocation}
+              disabled={loading}
+            >
+              <Text style={themedStyles.compactButtonText}>
+                {loading ? '📍...' : '📍'}
+              </Text>
+            </TouchableOpacity>
+            {hasCachedData && (
+              <TouchableOpacity 
+                style={[themedStyles.compactLocationButton, offlineMode ? themedStyles.compactOfflineActive : themedStyles.compactOffline]} 
+                onPress={handleToggleOfflineMode}
+                disabled={loading}
+              >
+                <Text style={themedStyles.compactButtonText}>
+                  {offlineMode ? '📶' : '📴'}
+                </Text>
+              </TouchableOpacity>
+            )}
+          </View>
+          <Text style={themedStyles.compactLocationStatus}>{locationStatus}</Text>
           <TouchableOpacity 
-            style={[themedStyles.locationButton, offlineMode ? themedStyles.offlineButtonActive : themedStyles.offlineButton]} 
-            onPress={handleToggleOfflineMode}
-            disabled={loading}
+            style={themedStyles.themeButton}
+            onPress={toggleTheme}
           >
-            <Text style={[themedStyles.buttonText, offlineMode && themedStyles.offlineButtonText]}>
-              {offlineMode ? '📶 Go Online' : '📴 Use Offline Mode'}
+            <Text style={themedStyles.themeButtonText}>
+              {theme === 'light' ? '🌙' : '☀️'}
             </Text>
           </TouchableOpacity>
-        )}
+        </View>
       </View>
+
+      <MapView
+        testID="interactive-map-view"
+        style={themedStyles.mapContainer}
+        region={mapRegion}
+        showsUserLocation={true}
+        showsMyLocationButton={true}
+        onRegionChangeComplete={setMapRegion}
+      >
+        {/* Current location marker */}
+        {userLocation && (
+          <Marker
+            testID="current-location-marker"
+            coordinate={{
+              latitude: userLocation.latitude,
+              longitude: userLocation.longitude,
+            }}
+            title="Your Location"
+            description="Current position"
+            pinColor="blue"
+          />
+        )}
+
+        {/* Place markers */}
+        <View testID="place-markers">
+          {places
+            .filter(place => place.coordinates) // Only show places with coordinates
+            .map((place) => (
+              <Marker
+                key={place.id}
+                coordinate={{
+                  latitude: place.coordinates!.latitude,
+                  longitude: place.coordinates!.longitude,
+                }}
+                title={place.name}
+                description={`${place.category} in ${place.city}`}
+                onPress={() => handleMarkerPress(place)}
+                pinColor={getMarkerColorByCategory(place.category)}
+              />
+            ))}
+        </View>
+      </MapView>
 
       <View style={themedStyles.stationsSection}>
         <Text style={themedStyles.sectionTitle}>
@@ -331,13 +371,13 @@ export function MapScreen() {
         </Text>
         
         {nearbyStations.length > 0 ? (
-          <FlatList
-            data={nearbyStations}
-            renderItem={renderStation}
-            keyExtractor={(item) => item.name}
-            style={themedStyles.stationsList}
-            testID="stations-list"
-          />
+          <View style={themedStyles.stationsContainer}>
+            {nearbyStations.map((station) => (
+              <View key={station.name}>
+                {renderStation({ item: station })}
+              </View>
+            ))}
+          </View>
         ) : (
           <Text style={themedStyles.noStationsText}>
             {loading ? 'Finding stations...' : 'No nearby stations found'}
@@ -397,47 +437,6 @@ export function MapScreen() {
         </View>
       )}
 
-      <MapView
-        testID="interactive-map-view"
-        style={themedStyles.mapContainer}
-        region={mapRegion}
-        showsUserLocation={true}
-        showsMyLocationButton={true}
-        onRegionChangeComplete={setMapRegion}
-      >
-        {/* Current location marker */}
-        {userLocation && (
-          <Marker
-            testID="current-location-marker"
-            coordinate={{
-              latitude: userLocation.latitude,
-              longitude: userLocation.longitude,
-            }}
-            title="Your Location"
-            description="Current position"
-            pinColor="blue"
-          />
-        )}
-
-        {/* Place markers */}
-        <View testID="place-markers">
-          {places
-            .filter(place => place.coordinates) // Only show places with coordinates
-            .map((place) => (
-              <Marker
-                key={place.id}
-                coordinate={{
-                  latitude: place.coordinates!.latitude,
-                  longitude: place.coordinates!.longitude,
-                }}
-                title={place.name}
-                description={`${place.category} in ${place.city}`}
-                onPress={() => handleMarkerPress(place)}
-                pinColor={getMarkerColorByCategory(place.category)}
-              />
-            ))}
-        </View>
-      </MapView>
     </View>
   );
 }
@@ -581,10 +580,55 @@ const createThemedStyles = (colors: any, theme: string) => StyleSheet.create({
     marginTop: 20,
   },
   mapContainer: {
-    height: 300,
+    height: 400,
     borderRadius: 8,
     overflow: 'hidden',
     marginBottom: 16,
+  },
+  headerControls: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    paddingHorizontal: 4,
+    minHeight: 44,
+  },
+  compactLocationControls: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+  },
+  compactLocationButton: {
+    width: 32,
+    height: 32,
+    borderRadius: 16,
+    backgroundColor: colors.primary,
+    justifyContent: 'center',
+    alignItems: 'center',
+    elevation: 2,
+    shadowColor: colors.text,
+    shadowOffset: { width: 0, height: 1 },
+    shadowOpacity: 0.2,
+    shadowRadius: 2,
+  },
+  compactButtonText: {
+    fontSize: 14,
+    fontWeight: '600',
+  },
+  compactLocationStatus: {
+    fontSize: 12,
+    color: colors.secondary,
+    flex: 1,
+    textAlign: 'center',
+    paddingHorizontal: 8,
+  },
+  compactOffline: {
+    backgroundColor: colors.secondary,
+  },
+  compactOfflineActive: {
+    backgroundColor: colors.accent,
+  },
+  stationsContainer: {
+    gap: 8,
   },
   delaysContainer: {
     marginTop: 8,

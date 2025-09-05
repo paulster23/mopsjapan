@@ -24,14 +24,14 @@ export class NavigationService {
         icon: 'map'
       },
       {
-        name: 'Itinerary',
-        route: 'ItineraryScreen',
-        icon: 'calendar'
-      },
-      {
         name: 'Places',
         route: 'PlacesScreen',
         icon: 'location'
+      },
+      {
+        name: 'Itinerary',
+        route: 'ItineraryScreen',
+        icon: 'calendar'
       },
       {
         name: 'Debug',
