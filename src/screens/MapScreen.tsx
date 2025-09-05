@@ -301,12 +301,26 @@ export function MapScreen() {
     }
   };
 
+  const getCategoryBackgroundColor = (category: PlaceCategory | 'all'): string => {
+    switch (category) {
+      case 'accommodation': return '#8B5CF6'; // purple
+      case 'restaurant': return '#F97316';     // orange
+      case 'entertainment': return '#10B981';  // green
+      case 'transport': return '#3B82F6';      // blue
+      case 'shopping': return '#EF4444';       // red
+      default: return colors.primary;          // default blue for "all"
+    }
+  };
+
   const CategoryButton = ({ category, label }: { category: PlaceCategory | 'all'; label: string }) => (
     <TouchableOpacity
       testID={`filter-${category}`}
       style={[
         themedStyles.categoryButton,
-        selectedCategory === category && themedStyles.activeCategoryButton
+        selectedCategory === category && {
+          backgroundColor: getCategoryBackgroundColor(category),
+          borderColor: getCategoryBackgroundColor(category),
+        }
       ]}
       onPress={() => handleCategoryFilter(category)}
     >
