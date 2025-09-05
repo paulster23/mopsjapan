@@ -421,6 +421,7 @@ export function MapScreen() {
                 description={`${place.category} in ${place.city}`}
                 onPress={() => handleMarkerPress(place)}
                 pinColor={getMarkerColorByCategory(place.category)}
+                category={place.category}
               />
             ))}
         </View>

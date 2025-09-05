@@ -19,35 +19,44 @@ if (Platform.OS === 'web') {
       shadowUrl: 'https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/images/marker-shadow.png',
     });
 
+    // Get category-specific icon
+    const getCategoryIcon = (category: string) => {
+      switch (category) {
+        case 'accommodation': return '🏨';
+        case 'restaurant': return '🍜';
+        case 'entertainment': return '🎭';
+        case 'transport': return '🚇';
+        case 'shopping': return '🛍️';
+        default: return '📍';
+      }
+    };
+
     // Create colored icons for different categories
-    const createColorIcon = (color: string) => {
+    const createColorIcon = (color: string, category?: string) => {
+      const icon = getCategoryIcon(category || '');
       return new L.DivIcon({
         className: 'custom-div-icon',
         html: `
           <div style="
             background-color: ${color}; 
-            width: 24px; 
-            height: 24px; 
+            width: 28px; 
+            height: 28px; 
             border-radius: 50%; 
             border: 2px solid white;
             box-shadow: 0 2px 5px rgba(0,0,0,0.3);
             display: flex;
             align-items: center;
             justify-content: center;
-            font-size: 12px;
+            font-size: 14px;
             color: white;
-          ">📍</div>`,
-        iconSize: [24, 24],
-        iconAnchor: [12, 12],
+          ">${icon}</div>`,
+        iconSize: [28, 28],
+        iconAnchor: [14, 14],
       });
     };
 
-    const colorIcons = {
-      purple: createColorIcon('#8B5CF6'),
-      orange: createColorIcon('#F97316'), 
-      green: createColorIcon('#10B981'),
-      blue: createColorIcon('#3B82F6'),
-      red: createColorIcon('#EF4444'),
+    const getColorIcon = (color: string, category?: string) => {
+      return createColorIcon(color, category);
     };
 
     MapView = ({ 
@@ -122,10 +131,21 @@ if (Platform.OS === 'web') {
       description, 
       onPress, 
       pinColor = 'red',
+      category,
       children,
       ...props 
     }: any) => {
-      const icon = colorIcons[pinColor as keyof typeof colorIcons] || colorIcons.red;
+      // Map pinColor to actual color values
+      const colorMap: Record<string, string> = {
+        purple: '#8B5CF6',
+        orange: '#F97316', 
+        green: '#10B981',
+        blue: '#3B82F6',
+        red: '#EF4444',
+      };
+      
+      const actualColor = colorMap[pinColor] || '#EF4444';
+      const icon = getColorIcon(actualColor, category);
       
       return (
         <LeafletMarker 
