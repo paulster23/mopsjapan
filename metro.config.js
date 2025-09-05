@@ -8,6 +8,22 @@ const originalResolver = config.resolver.resolveRequest;
 config.resolver.resolveRequest = (context, moduleName, platform) => {
   // Skip development-only modules in production builds or when platform is web
   if (platform === 'web') {
+    // Handle the specific BackHandler import that's failing
+    if (moduleName === '../Utilities/BackHandler') {
+      return {
+        filePath: path.join(__dirname, 'back-handler-web-shim.js'),
+        type: 'sourceFile',
+      };
+    }
+    
+    // Handle the specific Image import that's failing
+    if (moduleName === '../../Image/Image') {
+      return {
+        filePath: path.join(__dirname, 'image-web-shim.js'),
+        type: 'sourceFile',
+      };
+    }
+    
     // Skip React DevTools modules
     if (moduleName.includes('DevToolsSettings') || 
         moduleName.includes('setUpReactDevTools') ||
@@ -63,8 +79,15 @@ config.resolver.resolveRequest = (context, moduleName, platform) => {
     };
   }
   
-  // Handle ReactNativeConfigModule import issues  
-  if (moduleName === '../TurboModule/TurboModuleRegistry') {
+  // Handle TurboModuleRegistry import issues - comprehensive coverage
+  if (moduleName === '../TurboModule/TurboModuleRegistry' ||
+      moduleName === './TurboModuleRegistry' ||
+      moduleName === 'TurboModuleRegistry' ||
+      moduleName === '../Libraries/TurboModule/TurboModuleRegistry' ||
+      moduleName === 'react-native/Libraries/TurboModule/TurboModuleRegistry' ||
+      moduleName === './Libraries/TurboModule/TurboModuleRegistry' ||
+      moduleName.endsWith('TurboModuleRegistry') ||
+      moduleName.includes('TurboModule/TurboModuleRegistry')) {
     return {
       filePath: path.join(__dirname, 'rct-shim.js'),
       type: 'sourceFile',
