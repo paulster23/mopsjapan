@@ -185,9 +185,30 @@ if (Platform.OS === 'web') {
                     <strong style={{ fontSize: '14px', display: 'block', marginBottom: '4px' }}>
                       Your Location
                     </strong>
-                    <span style={{ fontSize: '12px', color: '#666' }}>
+                    <span style={{ fontSize: '12px', color: '#666', display: 'block', marginBottom: '8px' }}>
                       Current position
                     </span>
+                    <a
+                      href={`https://www.google.com/maps/search/?api=1&query=${userLocation.latitude},${userLocation.longitude}`}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      style={{
+                        display: 'inline-block',
+                        backgroundColor: '#4285F4',
+                        color: 'white',
+                        padding: '6px 12px',
+                        borderRadius: '4px',
+                        textDecoration: 'none',
+                        fontSize: '12px',
+                        fontWeight: '500',
+                        marginTop: '4px',
+                        transition: 'background-color 0.2s'
+                      }}
+                      onMouseOver={(e) => e.currentTarget.style.backgroundColor = '#3367D6'}
+                      onMouseOut={(e) => e.currentTarget.style.backgroundColor = '#4285F4'}
+                    >
+                      🧭 Navigate from here
+                    </a>
                   </div>
                 </Popup>
               </LeafletMarker>
@@ -237,10 +258,31 @@ if (Platform.OS === 'web') {
                 {title}
               </strong>
               {description && (
-                <span style={{ fontSize: '12px', color: '#666' }}>
+                <span style={{ fontSize: '12px', color: '#666', display: 'block', marginBottom: '8px' }}>
                   {description}
                 </span>
               )}
+              <a
+                href={`https://www.google.com/maps/search/?api=1&query=${coordinate.latitude},${coordinate.longitude}`}
+                target="_blank"
+                rel="noopener noreferrer"
+                style={{
+                  display: 'inline-block',
+                  backgroundColor: '#4285F4',
+                  color: 'white',
+                  padding: '6px 12px',
+                  borderRadius: '4px',
+                  textDecoration: 'none',
+                  fontSize: '12px',
+                  fontWeight: '500',
+                  marginTop: '4px',
+                  transition: 'background-color 0.2s'
+                }}
+                onMouseOver={(e) => e.currentTarget.style.backgroundColor = '#3367D6'}
+                onMouseOut={(e) => e.currentTarget.style.backgroundColor = '#4285F4'}
+              >
+                📍 Open in Google Maps
+              </a>
             </div>
           </Popup>
           {children}
