@@ -1,7 +1,7 @@
 import { LocationService } from './LocationService';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 
-export type PlaceCategory = 'accommodation' | 'restaurant' | 'entertainment' | 'transport' | 'shopping';
+export type PlaceCategory = 'accommodation' | 'restaurant' | 'entertainment' | 'transport' | 'shopping' | 'hardware';
 
 export interface Place {
   id: string;
@@ -201,7 +201,8 @@ export class GooglePlacesService {
       restaurant: 0,
       entertainment: 0,
       transport: 0,
-      shopping: 0
+      shopping: 0,
+      hardware: 0
     };
 
     const byCity: Record<string, number> = {};

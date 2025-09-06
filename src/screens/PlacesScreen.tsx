@@ -184,6 +184,7 @@ export function PlacesScreen() {
           <Text>{stats.byCategory.entertainment} entertainment</Text>
           <Text>{stats.byCategory.transport} transport</Text>
           <Text>{stats.byCategory.shopping} shopping</Text>
+          <Text>{stats.byCategory.hardware} hardware</Text>
           
           <Text style={styles.statsTitle}>Cities:</Text>
           {Object.entries(stats.byCity).map(([city, count]) => (
@@ -201,6 +202,7 @@ export function PlacesScreen() {
         <CategoryButton category="entertainment" label="Entertainment" />
         <CategoryButton category="transport" label="Transport" />
         <CategoryButton category="shopping" label="Shopping" />
+        <CategoryButton category="hardware" label="Hardware" />
       </View>
 
       {/* Places List */}
@@ -269,7 +271,7 @@ export function PlacesScreen() {
 
             <Text style={styles.categoryLabel}>Category:</Text>
             <View style={styles.categorySelector}>
-              {['accommodation', 'restaurant', 'entertainment', 'transport', 'shopping'].map((category) => (
+              {['accommodation', 'restaurant', 'entertainment', 'transport', 'shopping', 'hardware'].map((category) => (
                 <TouchableOpacity
                   key={category}
                   style={[

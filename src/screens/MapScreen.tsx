@@ -297,6 +297,7 @@ export function MapScreen() {
       case 'entertainment': return 'green';
       case 'transport': return 'blue';
       case 'shopping': return 'red';
+      case 'hardware': return 'gray';
       default: return 'red';
     }
   };
@@ -308,6 +309,7 @@ export function MapScreen() {
       case 'entertainment': return '#10B981';  // green
       case 'transport': return '#3B82F6';      // blue
       case 'shopping': return '#EF4444';       // red
+      case 'hardware': return '#6B7280';       // gray
       default: return colors.primary;          // default blue for "all"
     }
   };
@@ -374,6 +376,7 @@ export function MapScreen() {
         <CategoryButton category="entertainment" label="Entertainment" />
         <CategoryButton category="transport" label="Transport" />
         <CategoryButton category="shopping" label="Shopping" />
+        <CategoryButton category="hardware" label="Hardware" />
       </View>
 
       <MapView
