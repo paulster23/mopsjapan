@@ -142,18 +142,16 @@ export class EnhancedSyncService {
       // Get count before adding places for verification
       const beforeCount = this.googlePlacesService.getPlaceStatistics().total;
 
-      // Actually integrate places with duplicate detection
-      let placesAdded = 0;
-      let duplicatesSkipped = 0;
+      // Replace original places while preserving user edits
+      // First, replace all original places with new sync data
+      this.googlePlacesService.replaceOriginalPlaces(places);
+      
+      // Count statistics for reporting
+      let placesAdded = places.length;
+      let duplicatesSkipped = 0; // No duplicates when replacing all
 
-      for (const place of places) {
-        const added = this.googlePlacesService.addCustomPlace(place);
-        if (added) {
-          placesAdded++;
-        } else {
-          duplicatesSkipped++;
-        }
-      }
+      // Save the updated storage
+      await this.googlePlacesService.saveStorage();
 
       // Get count after adding places for verification
       const afterCount = this.googlePlacesService.getPlaceStatistics().total;
@@ -247,4 +245,5 @@ export class EnhancedSyncService {
 
     return results;
   }
+
 }

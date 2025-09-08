@@ -16,6 +16,24 @@ export interface Place {
   distance?: number;
 }
 
+export interface UserPlaceEdit {
+  placeId: string;
+  originalPlaceId?: string; // In case user renamed it and ID changed
+  editedFields: {
+    name?: string;
+    category?: PlaceCategory;
+    description?: string;
+  };
+  editedAt: string;
+  version: number;
+}
+
+export interface PlaceStorageData {
+  originalPlaces: Place[]; // Raw data from feeds
+  userEdits: UserPlaceEdit[]; // User modifications
+  lastSyncAt?: string;
+}
+
 export interface PlaceWithDistance extends Place {
   distance: number;
 }
@@ -34,13 +52,15 @@ export interface PlaceStatistics {
 
 export class GooglePlacesService {
   private locationService: LocationService;
-  private syncedPlaces: Place[] = [];
-  private readonly SYNCED_PLACES_KEY = 'syncedPlaces';
+  private originalPlaces: Place[] = [];
+  private userEdits: UserPlaceEdit[] = [];
+  private readonly PLACES_STORAGE_KEY = 'placesStorageData';
+  private readonly LEGACY_SYNCED_PLACES_KEY = 'syncedPlaces'; // For migration
 
   constructor(locationService: LocationService) {
     this.locationService = locationService;
-    // Load synced places from storage
-    this.loadSyncedPlaces();
+    // Load places storage data
+    this.loadPlacesStorage();
   }
 
   loadCustomMapPlaces(): Place[] {
@@ -48,23 +68,55 @@ export class GooglePlacesService {
     return [];
   }
 
-  private async loadSyncedPlaces(): Promise<void> {
+  private async loadPlacesStorage(): Promise<void> {
     try {
-      const stored = await AsyncStorage.getItem(this.SYNCED_PLACES_KEY);
+      // Try to load new format first
+      const stored = await AsyncStorage.getItem(this.PLACES_STORAGE_KEY);
       if (stored) {
-        this.syncedPlaces = JSON.parse(stored);
+        const storageData: PlaceStorageData = JSON.parse(stored);
+        this.originalPlaces = storageData.originalPlaces || [];
+        this.userEdits = storageData.userEdits || [];
+        return;
       }
+
+      // Migrate from legacy format if new format not found
+      await this.migrateLegacyStorage();
     } catch (error) {
-      console.warn('Failed to load synced places from storage:', error);
-      this.syncedPlaces = [];
+      console.warn('Failed to load places storage:', error);
+      this.originalPlaces = [];
+      this.userEdits = [];
     }
   }
 
-  private async saveSyncedPlaces(): Promise<void> {
+  private async migrateLegacyStorage(): Promise<void> {
     try {
-      await AsyncStorage.setItem(this.SYNCED_PLACES_KEY, JSON.stringify(this.syncedPlaces));
+      const legacyStored = await AsyncStorage.getItem(this.LEGACY_SYNCED_PLACES_KEY);
+      if (legacyStored) {
+        const legacyPlaces: Place[] = JSON.parse(legacyStored);
+        // Treat all legacy places as original places (no edits tracked)
+        this.originalPlaces = legacyPlaces;
+        this.userEdits = [];
+        
+        // Save in new format and remove legacy
+        await this.savePlacesStorage();
+        await AsyncStorage.removeItem(this.LEGACY_SYNCED_PLACES_KEY);
+        console.log('Successfully migrated legacy places storage');
+      }
     } catch (error) {
-      console.error('Failed to save synced places to storage:', error);
+      console.warn('Failed to migrate legacy storage:', error);
+    }
+  }
+
+  private async savePlacesStorage(): Promise<void> {
+    try {
+      const storageData: PlaceStorageData = {
+        originalPlaces: this.originalPlaces,
+        userEdits: this.userEdits,
+        lastSyncAt: new Date().toISOString()
+      };
+      await AsyncStorage.setItem(this.PLACES_STORAGE_KEY, JSON.stringify(storageData));
+    } catch (error) {
+      console.error('Failed to save places storage:', error);
     }
   }
 
@@ -127,7 +179,7 @@ export class GooglePlacesService {
   }
 
   addCustomPlace(newPlace: Omit<Place, 'id'>): boolean {
-    // Check if place already exists in both static and synced places
+    // Check if place already exists
     const existingPlace = this.getPlaceDetails(newPlace.name);
     if (existingPlace) {
       return false;
@@ -138,49 +190,193 @@ export class GooglePlacesService {
       id: this.generatePlaceId(newPlace.name)
     };
 
-    this.syncedPlaces.push(place);
+    // Add to original places (treat as new original data)
+    this.originalPlaces.push(place);
     
     // Save to storage asynchronously (but don't wait for it)
-    this.saveSyncedPlaces().catch(error => {
-      console.error('Failed to save synced places after adding:', error);
+    this.savePlacesStorage().catch(error => {
+      console.error('Failed to save places storage after adding:', error);
     });
     
     return true;
   }
 
-  updatePlace(placeId: string, updates: Partial<Pick<Place, 'name' | 'category' | 'description'>>): boolean {
-    // Find place in synced places
-    const placeIndex = this.syncedPlaces.findIndex(place => place.id === placeId);
-    
-    if (placeIndex === -1) {
+  // New method for sync operations to add places from external feeds
+  addOriginalPlace(newPlace: Place): boolean {
+    // Check if place already exists in original places
+    const existingPlace = this.originalPlaces.find(place => 
+      place.id === newPlace.id || place.name === newPlace.name
+    );
+    if (existingPlace) {
       return false;
     }
 
+    this.originalPlaces.push({ ...newPlace });
+    return true;
+  }
+
+  // Method to bulk replace original places (for sync operations)
+  replaceOriginalPlaces(newPlaces: Place[]): void {
+    this.originalPlaces = [...newPlaces];
+  }
+
+  // Public method for sync services to trigger storage save
+  async saveStorage(): Promise<void> {
+    await this.savePlacesStorage();
+  }
+
+  // Export user edits for backup/transfer
+  exportUserEdits(): string {
+    const exportData = {
+      userEdits: this.userEdits,
+      exportedAt: new Date().toISOString(),
+      version: '1.0'
+    };
+    return JSON.stringify(exportData, null, 2);
+  }
+
+  // Import user edits from backup
+  async importUserEdits(exportedData: string): Promise<{ success: boolean; message: string; editsImported: number }> {
+    try {
+      const importData = JSON.parse(exportedData);
+      
+      if (!importData.userEdits || !Array.isArray(importData.userEdits)) {
+        return { success: false, message: 'Invalid export format', editsImported: 0 };
+      }
+
+      // Validate edit structure
+      const validEdits: UserPlaceEdit[] = [];
+      for (const edit of importData.userEdits) {
+        if (edit.placeId && edit.editedFields && edit.editedAt && typeof edit.version === 'number') {
+          validEdits.push(edit);
+        }
+      }
+
+      // Merge with existing edits (imported edits take precedence for conflicts)
+      const mergedEdits: UserPlaceEdit[] = [...this.userEdits];
+      let importedCount = 0;
+
+      for (const importedEdit of validEdits) {
+        const existingIndex = mergedEdits.findIndex(edit => 
+          edit.placeId === importedEdit.placeId || edit.originalPlaceId === importedEdit.placeId
+        );
+
+        if (existingIndex >= 0) {
+          // Replace existing edit if imported one is newer
+          if (importedEdit.version > mergedEdits[existingIndex].version) {
+            mergedEdits[existingIndex] = importedEdit;
+            importedCount++;
+          }
+        } else {
+          // Add new edit
+          mergedEdits.push(importedEdit);
+          importedCount++;
+        }
+      }
+
+      this.userEdits = mergedEdits;
+      await this.savePlacesStorage();
+
+      return { 
+        success: true, 
+        message: `Successfully imported ${importedCount} edits`, 
+        editsImported: importedCount 
+      };
+    } catch (error) {
+      return { 
+        success: false, 
+        message: `Import failed: ${(error as Error).message}`, 
+        editsImported: 0 
+      };
+    }
+  }
+
+  // Get edit statistics
+  getEditStatistics(): { 
+    totalEdits: number; 
+    editedPlaces: number; 
+    lastEditAt?: string 
+  } {
+    const lastEdit = this.userEdits.reduce((latest, edit) => {
+      return !latest || edit.editedAt > latest.editedAt ? edit : latest;
+    }, null as UserPlaceEdit | null);
+
+    return {
+      totalEdits: this.userEdits.length,
+      editedPlaces: this.userEdits.length, // Each edit is for a different place
+      lastEditAt: lastEdit?.editedAt
+    };
+  }
+
+  updatePlace(placeId: string, updates: Partial<Pick<Place, 'name' | 'category' | 'description'>>): boolean {
+    // Find original place
+    const originalPlace = this.originalPlaces.find(place => place.id === placeId);
+    if (!originalPlace) {
+      // Check if this is an edited place ID (user might have renamed it)
+      const editedPlace = this.getAllPlaces().find(place => place.id === placeId);
+      if (!editedPlace) {
+        return false;
+      }
+    }
+
     // Check if new name conflicts with existing places (if name is being updated)
-    if (updates.name && updates.name !== this.syncedPlaces[placeIndex].name) {
+    if (updates.name) {
       const conflictingPlace = this.getPlaceDetails(updates.name);
       if (conflictingPlace && conflictingPlace.id !== placeId) {
         return false; // Name conflict
       }
     }
 
-    // Update the place
-    this.syncedPlaces[placeIndex] = {
-      ...this.syncedPlaces[placeIndex],
-      ...updates
-    };
+    // Find existing edit for this place or create new one
+    const originalPlaceForEdit = originalPlace || this.findOriginalPlaceByCurrentId(placeId);
+    if (!originalPlaceForEdit) {
+      return false;
+    }
 
-    // If name changed, update the ID as well
-    if (updates.name) {
-      this.syncedPlaces[placeIndex].id = this.generatePlaceId(updates.name);
+    let existingEditIndex = this.userEdits.findIndex(edit => 
+      edit.placeId === originalPlaceForEdit.id || edit.originalPlaceId === originalPlaceForEdit.id
+    );
+
+    if (existingEditIndex === -1) {
+      // Create new edit
+      const newEdit: UserPlaceEdit = {
+        placeId: originalPlaceForEdit.id,
+        editedFields: { ...updates },
+        editedAt: new Date().toISOString(),
+        version: 1
+      };
+      this.userEdits.push(newEdit);
+    } else {
+      // Update existing edit
+      this.userEdits[existingEditIndex] = {
+        ...this.userEdits[existingEditIndex],
+        editedFields: {
+          ...this.userEdits[existingEditIndex].editedFields,
+          ...updates
+        },
+        editedAt: new Date().toISOString(),
+        version: this.userEdits[existingEditIndex].version + 1
+      };
     }
 
     // Save to storage asynchronously
-    this.saveSyncedPlaces().catch(error => {
-      console.error('Failed to save synced places after updating:', error);
+    this.savePlacesStorage().catch(error => {
+      console.error('Failed to save places storage after updating:', error);
     });
 
     return true;
+  }
+
+  private findOriginalPlaceByCurrentId(currentId: string): Place | undefined {
+    // Find original place by checking if any edit resulted in this current ID
+    for (const edit of this.userEdits) {
+      if (edit.editedFields.name && this.generatePlaceId(edit.editedFields.name) === currentId) {
+        return this.originalPlaces.find(place => 
+          place.id === edit.placeId || place.id === edit.originalPlaceId
+        );
+      }
+    }
+    return undefined;
   }
 
   exportPlacesForCalendar(places: Place[]): CalendarEvent[] {
@@ -225,8 +421,36 @@ export class GooglePlacesService {
   }
 
   getAllPlaces(): Place[] {
-    // Return only synced places
-    return [...this.syncedPlaces];
+    return this.mergeOriginalPlacesWithEdits();
+  }
+
+  private mergeOriginalPlacesWithEdits(): Place[] {
+    const mergedPlaces: Place[] = [];
+    
+    for (const originalPlace of this.originalPlaces) {
+      // Find user edits for this place
+      const userEdit = this.userEdits.find(edit => 
+        edit.placeId === originalPlace.id || edit.originalPlaceId === originalPlace.id
+      );
+      
+      if (userEdit) {
+        // Apply user edits to the original place
+        const mergedPlace: Place = {
+          ...originalPlace,
+          ...userEdit.editedFields,
+          // If user renamed the place, use the new ID
+          id: userEdit.editedFields.name ? 
+              this.generatePlaceId(userEdit.editedFields.name) : 
+              originalPlace.id
+        };
+        mergedPlaces.push(mergedPlace);
+      } else {
+        // No edits, use original place as-is
+        mergedPlaces.push({ ...originalPlace });
+      }
+    }
+    
+    return mergedPlaces;
   }
 
   private generatePlaceId(name: string): string {
