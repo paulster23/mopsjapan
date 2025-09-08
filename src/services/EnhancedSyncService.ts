@@ -142,13 +142,12 @@ export class EnhancedSyncService {
       // Get count before adding places for verification
       const beforeCount = this.googlePlacesService.getPlaceStatistics().total;
 
-      // Replace original places while preserving user edits
-      // First, replace all original places with new sync data
-      this.googlePlacesService.replaceOriginalPlaces(places);
+      // Sync places from this specific map while preserving places from other maps
+      const syncResults = this.googlePlacesService.syncPlacesFromMap(mapId, places);
       
-      // Count statistics for reporting
-      let placesAdded = places.length;
-      let duplicatesSkipped = 0; // No duplicates when replacing all
+      // Use actual sync results for reporting
+      let placesAdded = syncResults.placesAdded;
+      let duplicatesSkipped = syncResults.duplicatesSkipped;
 
       // Save the updated storage
       await this.googlePlacesService.saveStorage();

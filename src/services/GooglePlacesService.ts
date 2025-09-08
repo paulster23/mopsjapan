@@ -15,6 +15,7 @@ export interface Place {
   };
   description?: string;
   distance?: number;
+  sourceMapId?: string; // Track which map this place came from
 }
 
 export interface UserPlaceEdit {
@@ -370,6 +371,37 @@ export class GooglePlacesService {
   // Method to bulk replace original places (for sync operations)
   replaceOriginalPlaces(newPlaces: Place[]): void {
     this.originalPlaces = [...newPlaces];
+  }
+
+  // Method to sync places from a specific map source
+  syncPlacesFromMap(mapId: string, newPlaces: Place[]): { placesAdded: number; duplicatesSkipped: number } {
+    // Remove existing places from this map source
+    this.originalPlaces = this.originalPlaces.filter(place => place.sourceMapId !== mapId);
+    
+    let placesAdded = 0;
+    let duplicatesSkipped = 0;
+    
+    // Add new places with sourceMapId
+    for (const newPlace of newPlaces) {
+      const placeWithSource: Place = {
+        ...newPlace,
+        sourceMapId: mapId
+      };
+      
+      // Check for duplicates by ID and name (across all maps)
+      const existingPlace = this.originalPlaces.find(place => 
+        place.id === placeWithSource.id || place.name === placeWithSource.name
+      );
+      
+      if (existingPlace) {
+        duplicatesSkipped++;
+      } else {
+        this.originalPlaces.push(placeWithSource);
+        placesAdded++;
+      }
+    }
+    
+    return { placesAdded, duplicatesSkipped };
   }
 
   // Public method for sync services to trigger storage save
