@@ -102,8 +102,9 @@ export function PlacesScreen() {
   const stats = googlePlacesService.getPlaceStatistics();
 
   const isCustomPlace = (place: Place): boolean => {
-    // Check if place is in synced places (custom places that can be edited)
-    return googlePlacesService['syncedPlaces'].some(syncedPlace => syncedPlace.id === place.id);
+    // All places are editable in the new storage system
+    // Original places from feeds can be edited (edits are stored separately)
+    return true;
   };
 
   const renderPlace = ({ item }: { item: Place }) => (

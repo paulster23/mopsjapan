@@ -9,7 +9,7 @@
     "ios": "expo start --ios",
     "web": "npm run build && npm run serve",
     "build": "expo export --platform web",
-    "serve": "npx serve dist -p 8080",
+    "serve": "npx serve dist --listen 8080",
     "deploy": "npm run build && npm run serve",
     "dev": "npm run build && npm run serve",
     "test": "jest",

@@ -1,5 +1,6 @@
 import { LocationService } from './LocationService';
 import AsyncStorage from '@react-native-async-storage/async-storage';
+import { isDevelopment } from '../config/environment';
 
 export type PlaceCategory = 'accommodation' | 'restaurant' | 'entertainment' | 'transport' | 'shopping' | 'hardware';
 
@@ -61,6 +62,8 @@ export class GooglePlacesService {
     this.locationService = locationService;
     // Load places storage data
     this.loadPlacesStorage();
+    // Load development mock data if in development environment
+    this.loadDevelopmentMockDataIfNeeded();
   }
 
   loadCustomMapPlaces(): Place[] {
@@ -105,6 +108,155 @@ export class GooglePlacesService {
     } catch (error) {
       console.warn('Failed to migrate legacy storage:', error);
     }
+  }
+
+  private loadDevelopmentMockDataIfNeeded(): void {
+    // Only load mock data in development environment
+    if (!isDevelopment()) {
+      return;
+    }
+
+    // Only load mock data if we have no original places (fresh start)
+    if (this.originalPlaces.length > 0) {
+      return;
+    }
+
+    // Create realistic Tokyo places for testing
+    const mockPlaces: Place[] = [
+      // Accommodation
+      {
+        id: 'hotel-gracery-shinjuku',
+        name: 'Hotel Gracery Shinjuku',
+        category: 'accommodation',
+        city: 'Tokyo',
+        coordinates: { latitude: 35.6943, longitude: 139.7006 },
+        description: 'Modern hotel in the heart of Shinjuku with great city views'
+      },
+      {
+        id: 'richmond-hotel-tokyo-suidobashi',
+        name: 'Richmond Hotel Tokyo Suidobashi',
+        category: 'accommodation', 
+        city: 'Tokyo',
+        coordinates: { latitude: 35.7022, longitude: 139.7528 },
+        description: 'Comfortable business hotel near Tokyo Dome'
+      },
+      
+      // Restaurants
+      {
+        id: 'sukiyabashi-jiro',
+        name: 'Sukiyabashi Jiro',
+        category: 'restaurant',
+        city: 'Tokyo',
+        coordinates: { latitude: 35.6717, longitude: 139.7633 },
+        description: 'World-famous sushi restaurant in Ginza'
+      },
+      {
+        id: 'nabezo-shibuya',
+        name: 'Nabezo Shibuya',
+        category: 'restaurant',
+        city: 'Tokyo', 
+        coordinates: { latitude: 35.6581, longitude: 139.7016 },
+        description: 'All-you-can-eat shabu-shabu and sushi buffet'
+      },
+      {
+        id: 'ichiran-ramen-shibuya',
+        name: 'Ichiran Ramen Shibuya',
+        category: 'restaurant',
+        city: 'Tokyo',
+        coordinates: { latitude: 35.6590, longitude: 139.7016 },
+        description: 'Famous tonkotsu ramen chain with individual booths'
+      },
+      
+      // Entertainment
+      {
+        id: 'tokyo-skytree',
+        name: 'Tokyo Skytree',
+        category: 'entertainment',
+        city: 'Tokyo',
+        coordinates: { latitude: 35.7101, longitude: 139.8107 },
+        description: 'Iconic broadcasting tower with observation decks'
+      },
+      {
+        id: 'teamlabs-borderless',
+        name: 'teamLab Borderless',
+        category: 'entertainment',
+        city: 'Tokyo',
+        coordinates: { latitude: 35.6249, longitude: 139.7798 },
+        description: 'Digital art museum in Odaiba'
+      },
+      {
+        id: 'sensoji-temple',
+        name: 'Sensoji Temple',
+        category: 'entertainment',
+        city: 'Tokyo',
+        coordinates: { latitude: 35.7148, longitude: 139.7967 },
+        description: 'Historic Buddhist temple in Asakusa'
+      },
+      
+      // Transport
+      {
+        id: 'jr-shinjuku-station',
+        name: 'JR Shinjuku Station',
+        category: 'transport',
+        city: 'Tokyo',
+        coordinates: { latitude: 35.6896, longitude: 139.7006 },
+        description: 'Major railway station and transport hub'
+      },
+      {
+        id: 'haneda-airport-terminal-2',
+        name: 'Haneda Airport Terminal 2',
+        category: 'transport',
+        city: 'Tokyo',
+        coordinates: { latitude: 35.5494, longitude: 139.7798 },
+        description: 'Domestic flights terminal at Tokyo Haneda Airport'
+      },
+      
+      // Shopping
+      {
+        id: 'shibuya-crossing',
+        name: 'Shibuya Sky',
+        category: 'shopping',
+        city: 'Tokyo',
+        coordinates: { latitude: 35.6598, longitude: 139.7006 },
+        description: 'Shopping and observation deck complex'
+      },
+      {
+        id: 'don-quijote-shibuya',
+        name: 'Don Quijote Shibuya',
+        category: 'shopping',
+        city: 'Tokyo',
+        coordinates: { latitude: 35.6617, longitude: 139.7040 },
+        description: '24-hour discount store with unique Japanese goods'
+      },
+      
+      // Hardware  
+      {
+        id: 'yodobashi-akiba',
+        name: 'Yodobashi-Akiba',
+        category: 'hardware',
+        city: 'Tokyo',
+        coordinates: { latitude: 35.6989, longitude: 139.7732 },
+        description: 'Massive electronics store in Akihabara'
+      },
+      {
+        id: 'bic-camera-shinjuku-east',
+        name: 'Bic Camera Shinjuku East',
+        category: 'hardware',
+        city: 'Tokyo',
+        coordinates: { latitude: 35.6911, longitude: 139.7041 },
+        description: 'Large electronics retailer near Shinjuku Station'
+      }
+    ];
+
+    // Add mock places as original places (they can be edited like synced data)
+    this.originalPlaces = [...mockPlaces];
+    
+    // Save the mock data so it persists between sessions
+    this.savePlacesStorage().catch(error => {
+      console.warn('Failed to save mock places storage:', error);
+    });
+    
+    console.log('Loaded', mockPlaces.length, 'development mock places');
   }
 
   private async savePlacesStorage(): Promise<void> {
