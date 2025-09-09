@@ -1,5 +1,5 @@
 import React, { useEffect, useState } from 'react';
-import { View, Text, StyleSheet, TouchableOpacity, Alert, FlatList, Linking, Platform } from 'react-native';
+import { View, Text, StyleSheet, TouchableOpacity, Alert, FlatList, Linking, Platform, Modal } from 'react-native';
 import { MapView, Marker } from '../components/PlatformMapView';
 import { useTheme } from '../contexts/ThemeContext';
 import { MapScreenService } from './services/MapScreenService';
@@ -65,6 +65,7 @@ export function MapScreen() {
     latitudeDelta: 0.05,
     longitudeDelta: 0.05,
   });
+  const [selectedMapPlace, setSelectedMapPlace] = useState<Place | null>(null);
   
   const locationService = new LocationService();
   const mapService = new MapScreenService(
@@ -210,35 +211,67 @@ export function MapScreen() {
     }
   };
 
-  const handleMarkerPress = async (place: Place) => {
+  const handleMarkerPress = (place: Place) => {
     if (!place.coordinates) {
       Alert.alert('No Location', 'This place does not have location coordinates');
       return;
     }
 
+    // Show modal instead of immediately opening external URL
+    setSelectedMapPlace(place);
+  };
+
+  const handleOpenInGoogleMaps = async (place: Place) => {
+    if (!place.coordinates) {
+      Alert.alert('No Location', 'This place does not have coordinates available');
+      return;
+    }
+
     const { latitude, longitude } = place.coordinates;
-    
-    // Create Google Maps URL for directions
     const destination = `${latitude},${longitude}`;
-    const label = encodeURIComponent(place.name);
     
-    // Try to open in Google Maps app, fallback to web
+    // Close modal first for better UX
+    setSelectedMapPlace(null);
+    
+    // Improved iOS-specific Google Maps URL with better parameters
     const googleMapsUrl = Platform.OS === 'ios' 
-      ? `comgooglemaps://?daddr=${destination}&directionsmode=transit&zoom=14&views=traffic`
+      ? `comgooglemaps://?daddr=${destination}&directionsmode=transit&zoom=16&views=traffic&q=${encodeURIComponent(place.name)}`
       : `google.navigation:q=${destination}&mode=transit`;
     
-    const webFallbackUrl = `https://www.google.com/maps/dir/?api=1&destination=${destination}&travelmode=transit`;
+    // Apple Maps fallback for iOS if Google Maps isn't installed
+    const appleMapsUrl = Platform.OS === 'ios' 
+      ? `maps://?daddr=${destination}&dirflg=r&q=${encodeURIComponent(place.name)}`
+      : null;
+    
+    const webFallbackUrl = `https://www.google.com/maps/dir/?api=1&destination=${destination}&travelmode=transit&destination_place_id=${encodeURIComponent(place.name)}`;
     
     try {
-      const canOpen = await Linking.canOpenURL(googleMapsUrl);
-      if (canOpen) {
+      // First try Google Maps app
+      const canOpenGoogleMaps = await Linking.canOpenURL(googleMapsUrl);
+      if (canOpenGoogleMaps) {
         await Linking.openURL(googleMapsUrl);
-      } else {
-        await Linking.openURL(webFallbackUrl);
+        return;
       }
+      
+      // On iOS, try Apple Maps as a native alternative
+      if (Platform.OS === 'ios' && appleMapsUrl) {
+        const canOpenAppleMaps = await Linking.canOpenURL(appleMapsUrl);
+        if (canOpenAppleMaps) {
+          await Linking.openURL(appleMapsUrl);
+          return;
+        }
+      }
+      
+      // Fallback to web version
+      await Linking.openURL(webFallbackUrl);
+      
     } catch (error) {
       console.error('Error opening maps:', error);
-      Alert.alert('Error', 'Could not open maps application');
+      Alert.alert(
+        'Maps Error', 
+        'Could not open maps. Please check if Google Maps or Apple Maps is installed.',
+        [{ text: 'OK', style: 'default' }]
+      );
     }
   };
 
@@ -494,6 +527,52 @@ export function MapScreen() {
           </TouchableOpacity>
         </View>
       )}
+
+      {/* Place Details Modal */}
+      <Modal
+        visible={selectedMapPlace !== null}
+        animationType="slide"
+        transparent={true}
+        testID="map-place-modal"
+      >
+        <View style={themedStyles.modalOverlay}>
+          <View style={themedStyles.modalContent}>
+            {selectedMapPlace && (
+              <>
+                <Text style={themedStyles.modalTitle}>{selectedMapPlace.name}</Text>
+                <Text style={themedStyles.modalCategory}>
+                  {selectedMapPlace.category.charAt(0).toUpperCase() + selectedMapPlace.category.slice(1)}
+                </Text>
+                <Text style={themedStyles.modalCity}>{selectedMapPlace.city}</Text>
+                {selectedMapPlace.description && (
+                  <Text style={themedStyles.modalDescription}>{selectedMapPlace.description}</Text>
+                )}
+                {selectedMapPlace.coordinates && (
+                  <Text style={themedStyles.modalCoordinates}>
+                    📍 {selectedMapPlace.coordinates.latitude.toFixed(4)}, {selectedMapPlace.coordinates.longitude.toFixed(4)}
+                  </Text>
+                )}
+                
+                <TouchableOpacity
+                  testID="open-google-maps-button"
+                  style={themedStyles.googleMapsButton}
+                  onPress={() => handleOpenInGoogleMaps(selectedMapPlace)}
+                >
+                  <Text style={themedStyles.googleMapsButtonText}>🗺️ Open in Google Maps</Text>
+                </TouchableOpacity>
+                
+                <TouchableOpacity
+                  testID="close-place-modal-button"
+                  style={themedStyles.closeButton}
+                  onPress={() => setSelectedMapPlace(null)}
+                >
+                  <Text style={themedStyles.closeButtonText}>Close</Text>
+                </TouchableOpacity>
+              </>
+            )}
+          </View>
+        </View>
+      </Modal>
 
     </View>
   );
@@ -827,6 +906,79 @@ const createThemedStyles = (colors: any, theme: string) => StyleSheet.create({
   hideDirectionsButtonText: {
     color: '#fff',
     fontSize: 12,
+  },
+  modalOverlay: {
+    flex: 1,
+    backgroundColor: 'rgba(0, 0, 0, 0.5)',
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  modalContent: {
+    backgroundColor: colors.background,
+    borderRadius: 12,
+    padding: 24,
+    width: '90%',
+    maxHeight: '80%',
+    maxWidth: 400, // Better for iPhone 13 Mini
+  },
+  modalTitle: {
+    fontSize: 20,
+    fontWeight: 'bold',
+    marginBottom: 12,
+    textAlign: 'center',
+    color: colors.text,
+  },
+  modalCategory: {
+    fontSize: 16,
+    fontWeight: '600',
+    marginBottom: 8,
+    textAlign: 'center',
+    color: colors.primary,
+  },
+  modalCity: {
+    fontSize: 14,
+    marginBottom: 8,
+    textAlign: 'center',
+    color: colors.secondary,
+  },
+  modalDescription: {
+    fontSize: 14,
+    marginBottom: 12,
+    textAlign: 'center',
+    color: colors.text,
+    lineHeight: 20,
+  },
+  modalCoordinates: {
+    fontSize: 12,
+    marginBottom: 16,
+    textAlign: 'center',
+    color: colors.secondary,
+    fontFamily: 'monospace',
+  },
+  googleMapsButton: {
+    backgroundColor: colors.primary,
+    padding: 14,
+    borderRadius: 8,
+    marginBottom: 12,
+    alignItems: 'center',
+    minHeight: 44, // iPhone-friendly touch target
+  },
+  googleMapsButtonText: {
+    color: '#fff',
+    fontSize: 16,
+    fontWeight: '600',
+  },
+  closeButton: {
+    backgroundColor: colors.secondary,
+    padding: 12,
+    borderRadius: 6,
+    alignItems: 'center',
+    minHeight: 44, // iPhone-friendly touch target
+  },
+  closeButtonText: {
+    color: '#fff',
+    fontSize: 14,
+    fontWeight: '500',
   },
 });
 

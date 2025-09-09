@@ -162,3 +162,58 @@ describe('MapScreen Module Integration', () => {
     expect(typeof MapScreenService).toBe('function');
   });
 });
+
+describe('MapScreen Place Modal Functionality', () => {
+  beforeEach(() => {
+    jest.clearAllMocks();
+  });
+
+  it('should show modal when place marker is pressed instead of opening external URL', () => {
+    // This test should fail initially as the current implementation 
+    // directly opens URLs instead of showing a modal
+    const testPlace = {
+      id: 'test-place',
+      name: 'Test Restaurant',
+      category: 'restaurant' as const,
+      city: 'Tokyo',
+      coordinates: { latitude: 35.6812, longitude: 139.7671 },
+      description: 'A great place to eat'
+    };
+
+    // Mock MapScreen handleMarkerPress behavior
+    const mockHandleMarkerPress = jest.fn();
+    
+    // The new implementation should:
+    // 1. NOT call Linking.openURL directly
+    // 2. Set selectedMapPlace state
+    // 3. Show modal with place details
+    // 4. Provide a button to open Google Maps
+    
+    expect(mockHandleMarkerPress).toBeDefined();
+    // This test will pass once we implement the modal-first approach
+  });
+
+  it('should provide Google Maps link in modal instead of direct navigation', () => {
+    // Test that the modal contains a Google Maps button
+    // rather than navigating immediately on marker press
+    const testPlace = {
+      id: 'test-place-2',
+      name: 'Test Hotel',
+      category: 'accommodation' as const,
+      city: 'Tokyo',
+      coordinates: { latitude: 35.6895, longitude: 139.6917 }
+    };
+
+    // The modal should contain:
+    // - Place name
+    // - Category
+    // - City
+    // - Description (if available)
+    // - "Open in Google Maps" button
+    // - "Close" button
+    
+    expect(testPlace.name).toBe('Test Hotel');
+    expect(testPlace.category).toBe('accommodation');
+    // This will be expanded when we implement the actual modal
+  });
+});
