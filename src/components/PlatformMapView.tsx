@@ -32,26 +32,71 @@ if (Platform.OS === 'web') {
     };
 
     // Create colored icons for different categories
-    const createColorIcon = (color: string, category?: string) => {
+    const createColorIcon = (color: string, category?: string, showLabel?: boolean, labelText?: string, zoomLevel?: number) => {
       const icon = getCategoryIcon(category || '');
+      
+      // Determine label display settings based on zoom level
+      const shouldShowLabel = showLabel && labelText && zoomLevel && zoomLevel >= 14;
+      let fontSize = '10px';
+      let maxWidth = '80px';
+      
+      if (zoomLevel && zoomLevel >= 16) {
+        fontSize = '12px';
+        maxWidth = '120px';
+      } else if (zoomLevel && zoomLevel >= 15) {
+        fontSize = '11px';
+        maxWidth = '100px';
+      }
+      
+      // Truncate label text for mobile
+      let displayLabel = labelText || '';
+      if (displayLabel.length > 15) {
+        displayLabel = displayLabel.substring(0, 12) + '...';
+      }
+      
+      const labelHTML = shouldShowLabel ? `
+        <div style="
+          position: absolute;
+          top: 32px;
+          left: 50%;
+          transform: translateX(-50%);
+          background: rgba(255, 255, 255, 0.9);
+          border: 1px solid rgba(0, 0, 0, 0.2);
+          border-radius: 4px;
+          padding: 2px 6px;
+          font-size: ${fontSize};
+          font-weight: 600;
+          color: #333;
+          white-space: nowrap;
+          max-width: ${maxWidth};
+          overflow: hidden;
+          text-overflow: ellipsis;
+          box-shadow: 0 1px 3px rgba(0,0,0,0.2);
+          pointer-events: none;
+        ">${displayLabel}</div>
+      ` : '';
+      
       return new L.DivIcon({
         className: 'custom-div-icon',
         html: `
-          <div style="
-            background-color: ${color}; 
-            width: 28px; 
-            height: 28px; 
-            border-radius: 50%; 
-            border: 2px solid white;
-            box-shadow: 0 2px 5px rgba(0,0,0,0.3);
-            display: flex;
-            align-items: center;
-            justify-content: center;
-            font-size: 14px;
-            color: white;
-          ">${icon}</div>`,
-        iconSize: [28, 28],
-        iconAnchor: [14, 14],
+          <div style="position: relative;">
+            <div style="
+              background-color: ${color}; 
+              width: 28px; 
+              height: 28px; 
+              border-radius: 50%; 
+              border: 2px solid white;
+              box-shadow: 0 2px 5px rgba(0,0,0,0.3);
+              display: flex;
+              align-items: center;
+              justify-content: center;
+              font-size: 14px;
+              color: white;
+            ">${icon}</div>
+            ${labelHTML}
+          </div>`,
+        iconSize: shouldShowLabel ? [140, 60] : [28, 28],
+        iconAnchor: shouldShowLabel ? [70, 14] : [14, 14],
       });
     };
 
@@ -108,8 +153,8 @@ if (Platform.OS === 'web') {
       });
     };
 
-    const getColorIcon = (color: string, category?: string) => {
-      return createColorIcon(color, category);
+    const getColorIcon = (color: string, category?: string, showLabel?: boolean, labelText?: string, zoomLevel?: number) => {
+      return createColorIcon(color, category, showLabel, labelText, zoomLevel);
     };
 
     MapView = ({ 
@@ -117,6 +162,8 @@ if (Platform.OS === 'web') {
       style, 
       children, 
       onRegionChangeComplete,
+      onZoomChange,
+      currentZoom,
       showsUserLocation,
       showsMyLocationButton,
       ...props 
@@ -155,6 +202,14 @@ if (Platform.OS === 'web') {
                   (error) => console.log('Location error:', error),
                   { enableHighAccuracy: true }
                 );
+              }
+              
+              // Set up zoom change listener
+              if (onZoomChange) {
+                map.target.on('zoomend', () => {
+                  const zoom = map.target.getZoom();
+                  onZoomChange(zoom);
+                });
               }
             }}
             onMoveEnd={(e) => {
@@ -226,6 +281,8 @@ if (Platform.OS === 'web') {
       onPress, 
       pinColor = 'red',
       category,
+      showLabel = false,
+      zoomLevel,
       children,
       ...props 
     }: any) => {
@@ -239,7 +296,7 @@ if (Platform.OS === 'web') {
       };
       
       const actualColor = colorMap[pinColor] || '#EF4444';
-      const icon = getColorIcon(actualColor, category);
+      const icon = getColorIcon(actualColor, category, showLabel, title, zoomLevel);
       
       return (
         <LeafletMarker 

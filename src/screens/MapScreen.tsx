@@ -65,6 +65,7 @@ export function MapScreen() {
     latitudeDelta: 0.05,
     longitudeDelta: 0.05,
   });
+  const [currentZoom, setCurrentZoom] = useState<number>(13); // Track zoom level for label visibility
   const [selectedMapPlace, setSelectedMapPlace] = useState<Place | null>(null);
   
   const locationService = new LocationService();
@@ -244,6 +245,56 @@ export function MapScreen() {
     }
   };
 
+  const handleZoomChange = (zoom: number) => {
+    setCurrentZoom(zoom);
+  };
+
+  const getMaxPlacesToShow = (zoomLevel: number) => {
+    // Smart density control to prevent UI cramming
+    if (zoomLevel <= 13) return 10;  // Very few at overview level
+    if (zoomLevel <= 14) return 20;  // Moderate at neighborhood level
+    if (zoomLevel <= 15) return 35;  // More at street level
+    return 50; // Maximum at close zoom
+  };
+
+  const getPlacesToShow = () => {
+    const maxPlaces = getMaxPlacesToShow(currentZoom);
+    
+    // Show closest places first if user location is available
+    if (userLocation) {
+      return filteredPlaces
+        .filter(place => place.coordinates)
+        .map(place => ({
+          ...place,
+          distance: calculateDistance(
+            userLocation.latitude,
+            userLocation.longitude,
+            place.coordinates!.latitude,
+            place.coordinates!.longitude
+          )
+        }))
+        .sort((a, b) => a.distance - b.distance)
+        .slice(0, maxPlaces);
+    }
+    
+    // If no user location, just limit by max count
+    return filteredPlaces
+      .filter(place => place.coordinates)
+      .slice(0, maxPlaces);
+  };
+
+  const calculateDistance = (lat1: number, lon1: number, lat2: number, lon2: number) => {
+    const R = 6371; // Earth's radius in km
+    const dLat = (lat2 - lat1) * Math.PI / 180;
+    const dLon = (lon2 - lon1) * Math.PI / 180;
+    const a = 
+      Math.sin(dLat/2) * Math.sin(dLat/2) +
+      Math.cos(lat1 * Math.PI / 180) * Math.cos(lat2 * Math.PI / 180) *
+      Math.sin(dLon/2) * Math.sin(dLon/2);
+    const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1-a));
+    return R * c;
+  };
+
   const renderStation = ({ item }: { item: StationWithStatus }) => (
     <View style={themedStyles.stationItem}>
       <View style={themedStyles.stationHeader}>
@@ -388,6 +439,8 @@ export function MapScreen() {
         showsUserLocation={true}
         showsMyLocationButton={true}
         onRegionChangeComplete={setMapRegion}
+        onZoomChange={handleZoomChange}
+        currentZoom={currentZoom}
       >
         {/* Current location marker */}
         {userLocation && (
@@ -405,22 +458,22 @@ export function MapScreen() {
 
         {/* Place markers */}
         <View testID="place-markers">
-          {filteredPlaces
-            .filter(place => place.coordinates) // Only show places with coordinates
-            .map((place) => (
-              <Marker
-                key={place.id}
-                coordinate={{
-                  latitude: place.coordinates!.latitude,
-                  longitude: place.coordinates!.longitude,
-                }}
-                title={place.name}
-                description={`${place.category} in ${place.city}`}
-                onPress={() => handleMarkerPress(place)}
-                pinColor={getMarkerColorByCategory(place.category)}
-                category={place.category}
-              />
-            ))}
+          {getPlacesToShow().map((place) => (
+            <Marker
+              key={place.id}
+              coordinate={{
+                latitude: place.coordinates!.latitude,
+                longitude: place.coordinates!.longitude,
+              }}
+              title={place.name}
+              description={`${place.category} in ${place.city}`}
+              onPress={() => handleMarkerPress(place)}
+              pinColor={getMarkerColorByCategory(place.category)}
+              category={place.category}
+              showLabel={currentZoom >= 14}
+              zoomLevel={currentZoom}
+            />
+          ))}
         </View>
       </MapView>
 
