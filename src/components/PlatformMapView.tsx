@@ -8,7 +8,7 @@ let Marker: any;
 if (Platform.OS === 'web') {
   // Web platform - use Leaflet
   try {
-    const { MapContainer, TileLayer, Marker: LeafletMarker } = require('react-leaflet');
+    const { MapContainer, TileLayer, Marker: LeafletMarker, Popup } = require('react-leaflet');
     const L = require('leaflet');
     
     // Fix Leaflet default icon issues on web

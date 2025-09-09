@@ -62,6 +62,26 @@ export function PlacesScreen() {
     setSelectedCategory(category);
   };
 
+  const handleOpenInGoogleMaps = async (place: Place) => {
+    if (!place.coordinates) {
+      Alert.alert('No Location', 'This place does not have coordinates available');
+      return;
+    }
+
+    const { latitude, longitude } = place.coordinates;
+    
+    // Use the same working URL pattern from MapScreen
+    const googleMapsUrl = `https://www.google.com/maps/search/?api=1&query=${latitude},${longitude}`;
+    
+    try {
+      // Open the working URL in browser
+      window.open(googleMapsUrl, '_blank');
+    } catch (error) {
+      console.error('Error opening Google Maps:', error);
+      Alert.alert('Error', 'Could not open Google Maps');
+    }
+  };
+
 
 
   const handleEditPlace = (place: Place) => {
@@ -116,6 +136,18 @@ export function PlacesScreen() {
         <Text style={styles.placeName}>{item.name}</Text>
         <View style={styles.placeHeaderRight}>
           <Text style={styles.placeCategory}>{item.category.charAt(0).toUpperCase() + item.category.slice(1)}</Text>
+          {item.coordinates && (
+            <TouchableOpacity
+              testID={`maps-button-${item.id}`}
+              style={styles.mapsButton}
+              onPress={(e) => {
+                e.stopPropagation();
+                handleOpenInGoogleMaps(item);
+              }}
+            >
+              <Text style={styles.mapsButtonText}>🗺️</Text>
+            </TouchableOpacity>
+          )}
           {isCustomPlace(item) && (
             <TouchableOpacity
               style={styles.editButton}
@@ -238,6 +270,15 @@ export function PlacesScreen() {
                   <Text testID="place-coordinates" style={styles.modalCoordinates}>
                     {selectedPlace.coordinates.latitude}, {selectedPlace.coordinates.longitude}
                   </Text>
+                )}
+                {selectedPlace.coordinates && (
+                  <TouchableOpacity
+                    testID="modal-maps-button"
+                    style={styles.googleMapsButton}
+                    onPress={() => handleOpenInGoogleMaps(selectedPlace)}
+                  >
+                    <Text style={styles.googleMapsButtonText}>🗺️ Open in Google Maps</Text>
+                  </TouchableOpacity>
                 )}
                 <TouchableOpacity
                   testID="close-modal-button"
@@ -430,6 +471,18 @@ const styles = StyleSheet.create({
   editButtonText: {
     fontSize: 14,
   },
+  mapsButton: {
+    padding: 4,
+    borderRadius: 4,
+    backgroundColor: '#e8f4f8',
+    minWidth: 44, // iPhone-friendly touch target
+    minHeight: 44,
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  mapsButtonText: {
+    fontSize: 14,
+  },
   placeName: {
     fontSize: 16,
     fontWeight: '600',
@@ -499,11 +552,25 @@ const styles = StyleSheet.create({
     fontFamily: 'monospace',
     marginBottom: 16,
   },
-  closeButton: {
+  googleMapsButton: {
     backgroundColor: '#007AFF',
+    padding: 14,
+    borderRadius: 8,
+    marginBottom: 12,
+    alignItems: 'center',
+    minHeight: 44, // iPhone-friendly touch target
+  },
+  googleMapsButtonText: {
+    color: '#fff',
+    fontSize: 16,
+    fontWeight: '600',
+  },
+  closeButton: {
+    backgroundColor: '#6c757d',
     padding: 12,
     borderRadius: 8,
     alignItems: 'center',
+    minHeight: 44, // iPhone-friendly touch target
   },
   closeButtonText: {
     color: '#fff',
