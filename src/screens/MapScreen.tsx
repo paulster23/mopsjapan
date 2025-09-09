@@ -1,5 +1,5 @@
 import React, { useEffect, useState } from 'react';
-import { View, Text, StyleSheet, TouchableOpacity, Alert, FlatList, Linking, Platform, Modal } from 'react-native';
+import { View, Text, StyleSheet, TouchableOpacity, Alert, FlatList, Modal } from 'react-native';
 import { MapView, Marker } from '../components/PlatformMapView';
 import { useTheme } from '../contexts/ThemeContext';
 import { MapScreenService } from './services/MapScreenService';
@@ -217,7 +217,7 @@ export function MapScreen() {
       return;
     }
 
-    // Show modal instead of immediately opening external URL
+    // Show modal with place details
     setSelectedMapPlace(place);
   };
 
@@ -228,50 +228,19 @@ export function MapScreen() {
     }
 
     const { latitude, longitude } = place.coordinates;
-    const destination = `${latitude},${longitude}`;
+    
+    // Use the same working URL pattern from Leaflet popup
+    const googleMapsUrl = `https://www.google.com/maps/search/?api=1&query=${latitude},${longitude}`;
     
     // Close modal first for better UX
     setSelectedMapPlace(null);
     
-    // Improved iOS-specific Google Maps URL with better parameters
-    const googleMapsUrl = Platform.OS === 'ios' 
-      ? `comgooglemaps://?daddr=${destination}&directionsmode=transit&zoom=16&views=traffic&q=${encodeURIComponent(place.name)}`
-      : `google.navigation:q=${destination}&mode=transit`;
-    
-    // Apple Maps fallback for iOS if Google Maps isn't installed
-    const appleMapsUrl = Platform.OS === 'ios' 
-      ? `maps://?daddr=${destination}&dirflg=r&q=${encodeURIComponent(place.name)}`
-      : null;
-    
-    const webFallbackUrl = `https://www.google.com/maps/dir/?api=1&destination=${destination}&travelmode=transit&destination_place_id=${encodeURIComponent(place.name)}`;
-    
     try {
-      // First try Google Maps app
-      const canOpenGoogleMaps = await Linking.canOpenURL(googleMapsUrl);
-      if (canOpenGoogleMaps) {
-        await Linking.openURL(googleMapsUrl);
-        return;
-      }
-      
-      // On iOS, try Apple Maps as a native alternative
-      if (Platform.OS === 'ios' && appleMapsUrl) {
-        const canOpenAppleMaps = await Linking.canOpenURL(appleMapsUrl);
-        if (canOpenAppleMaps) {
-          await Linking.openURL(appleMapsUrl);
-          return;
-        }
-      }
-      
-      // Fallback to web version
-      await Linking.openURL(webFallbackUrl);
-      
+      // Open the working URL in browser
+      window.open(googleMapsUrl, '_blank');
     } catch (error) {
-      console.error('Error opening maps:', error);
-      Alert.alert(
-        'Maps Error', 
-        'Could not open maps. Please check if Google Maps or Apple Maps is installed.',
-        [{ text: 'OK', style: 'default' }]
-      );
+      console.error('Error opening Google Maps:', error);
+      Alert.alert('Error', 'Could not open Google Maps');
     }
   };
 
