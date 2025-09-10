@@ -19,9 +19,12 @@ export class ItineraryParser {
 - Arrive air HDN at 2:20pm local time
 - Subway to apartment: COCO Nakameguro 202 Tokyo-to, Tokyo, Meguro-ku, Kami-Meguro 1-7-5-202, Japan
 
-9/13/2025
-- Nozomi Train to Osaka
+9/11/2025
+- Nozomi Train to Osaka 
 - Stay at Minoo Onsen: 2 Chome-14-71 Minoo, Minoh, Osaka 562-0001, Japan
+
+9/13/2025
+- Move to 1 Chome-11-2 Nipponbashi, Chuo Ward, Osaka, 542-0073, Japan
 - See Faraquet show at Conpass: 542-0083 Osaka, Chuo Ward, Higashishinsaibashi, 1 Chome−12−20
 
 9/15/2025

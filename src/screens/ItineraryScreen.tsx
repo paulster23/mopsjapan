@@ -168,6 +168,28 @@ export function ItineraryScreen() {
     setNewEntry({ time: '', type: 'event', description: '' });
   };
 
+  const handleNavigateHere = async (entry: ItineraryEntry) => {
+    // Extract address from destination or description
+    const address = entry.destination || entry.description;
+    
+    if (!address || address.trim().length === 0) {
+      Alert.alert('No Address', 'This entry does not have a destination address available');
+      return;
+    }
+    
+    // Use Google Maps search with the address text
+    // This matches the pattern used in MapScreen and PlacesScreen
+    const encodedAddress = encodeURIComponent(address.trim());
+    const googleMapsUrl = `https://www.google.com/maps/search/?api=1&query=${encodedAddress}`;
+    
+    try {
+      window.open(googleMapsUrl, '_blank');
+    } catch (error) {
+      console.error('Failed to open Google Maps:', error);
+      Alert.alert('Navigation Error', 'Could not open Google Maps');
+    }
+  };
+
   if (loading) {
     return (
       <View style={styles.container} testID="itinerary-container">
@@ -218,7 +240,10 @@ export function ItineraryScreen() {
                   {itinerary[currentStep.dayIndex].entries[currentStep.entryIndex].description}
                 </Text>
                 {currentStep.isToday && currentStep.isUpcoming && (
-                  <TouchableOpacity style={styles.navigateButton}>
+                  <TouchableOpacity 
+                    style={styles.navigateButton}
+                    onPress={() => handleNavigateHere(itinerary[currentStep.dayIndex].entries[currentStep.entryIndex])}
+                  >
                     <Text style={styles.navigateButtonText}>🗺️ Navigate Here</Text>
                   </TouchableOpacity>
                 )}
@@ -276,6 +301,15 @@ export function ItineraryScreen() {
                     <Text style={styles.timeText}>{entry.time}</Text>
                   )}
                   <View style={[styles.typeIndicator, { backgroundColor: service.getEntryTypeColor(entry.type) }]} />
+                  {entry.destination && (
+                    <TouchableOpacity 
+                      style={styles.entryMapsButton}
+                      onPress={() => handleNavigateHere(entry)}
+                      testID={`entry-maps-button-${dayIndex}-${entryIndex}`}
+                    >
+                      <Text style={styles.entryMapsButtonText}>🗺️</Text>
+                    </TouchableOpacity>
+                  )}
                   {editMode && (
                     <View style={styles.entryActions}>
                       <TouchableOpacity 
@@ -654,5 +688,20 @@ const styles = StyleSheet.create({
     borderLeftWidth: 4,
     borderLeftColor: '#FF9800',
     backgroundColor: '#FFF8E1',
+  },
+  // Entry-level Google Maps button styles (iPhone 13 Mini optimized)
+  entryMapsButton: {
+    padding: 4,
+    borderRadius: 4,
+    backgroundColor: '#e8f4f8',
+    minWidth: 44, // iPhone-friendly touch target
+    minHeight: 44,
+    justifyContent: 'center',
+    alignItems: 'center',
+    marginLeft: 8,
+  },
+  entryMapsButtonText: {
+    fontSize: 16,
+    color: '#007AFF',
   },
 });
